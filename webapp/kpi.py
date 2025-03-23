@@ -1,7 +1,7 @@
 import locale
 from datetime import timedelta
 
-locale.setlocale(locale.LC_TIME, 'fr_FR.UTF-8')
+#locale.setlocale(locale.LC_TIME, 'fr_FR.UTF-8')
 
 def get_closest_value(df, target_time):
     """Return last value <= target_time."""

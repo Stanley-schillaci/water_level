@@ -4,7 +4,7 @@ import plotly.express as px
 import locale
 
 from datetime import timedelta, datetime
-locale.setlocale(locale.LC_TIME, 'fr_FR.UTF-8')
+#locale.setlocale(locale.LC_TIME, 'fr_FR.UTF-8')
 
 from webapp.data_access import get_first_measure_data, get_all_data
 from webapp.ui_components import inject_kpi_style, render_kpi

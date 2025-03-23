@@ -28,8 +28,8 @@ project/
 ## Installation
 
 1. Cloner le dépôt ou récupérer les fichiers du projet :
-   git clone <URL_DU_REPO> my_niveau_eau
-   cd my_niveau_eau/project
+   git clone https://github.com/Stanley-schillaci/water_level.git
+   cd water_level
 
 2. Créer un environnement virtuel (optionnel mais recommandé) :
    python -m venv venv
