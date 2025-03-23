@@ -81,7 +81,7 @@ if not df_daily.empty:
         y="value",
         color="Year",
         color_discrete_map=global_color_map,
-        labels={"value": "Niveau d'eau (mNGF)"}
+        labels={"value": "Niveau d'eau (mNGF)", "Date": "Date", "Year": "Année"}
     )
     # Axe X avec date au format "jour mois année"
     fig3.update_layout(
@@ -129,7 +129,7 @@ if not df_comparison.empty:
             legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="center", x=0.5),
             xaxis=dict(
                 range=["2000-01-01", "2000-12-31"],
-                tickformat="%B",  # Affiche uniquement jour et mois
+                tickformat="%d %B",  # Affiche uniquement jour et mois
                 tickangle=-45,
                 side="bottom",
                 title=None,
