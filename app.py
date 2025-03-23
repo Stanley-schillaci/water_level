@@ -87,7 +87,7 @@ if not df_daily.empty:
     fig3.update_layout(
         hovermode="x unified",
         margin=dict(l=20, r=20, t=20, b=20),
-        xaxis=dict(tickformat="%B %Y", tickangle=-45, title=None, dtick="M3"),
+        xaxis=dict(tickformat="%B %Y", hoverformat="%d %B %Y", tickangle=-45, title=None, dtick="M3"),
         legend=dict(orientation="h", yanchor="top", y=-0.3, xanchor="center", x=0.5)
     )
     for trace in fig3.data:
@@ -129,7 +129,8 @@ if not df_comparison.empty:
             legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="center", x=0.5),
             xaxis=dict(
                 range=["2000-01-01", "2000-12-31"],
-                tickformat="%d %B",  # Affiche uniquement jour et mois
+                tickformat="%B",  # Affiche uniquement jour et mois
+                hoverformat="%d %B %Y",
                 tickangle=-45,
                 side="bottom",
                 title=None,
