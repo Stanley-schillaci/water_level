@@ -65,7 +65,7 @@ def add_measure(date_str, hour_str, value, unit, db_path=DB_PATH):
             conn.commit()
         return True
     else:
-        logger.warning(f"Record for {date_str} {hour_str} exists. Skipping.")
+        logger.debug(f"Record for {date_str} {hour_str} exists. Skipping.")
         return False
 
 def get_all_measures(db_path=DB_PATH):
