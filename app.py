@@ -87,11 +87,11 @@ if not df_daily.empty:
     fig3.update_layout(
         hovermode="x unified",
         margin=dict(l=20, r=20, t=20, b=20),
-        xaxis=dict(tickformat="%d %B %Y", tickangle=-45, title=None),
-        legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="center", x=0.5)
+        xaxis=dict(tickformat="%B %Y", tickangle=-45, title=None, dtick="M3"),
+        legend=dict(orientation="h", yanchor="top", y=-0.3, xanchor="center", x=0.5)
     )
     for trace in fig3.data:
-        trace.hovertemplate = f"Date : %{{x|%d %B %Y}}<br>Niveau : %{{y:.2f}} m<extra></extra>"
+        trace.hovertemplate = f"Niveau : %{{y:.2f}} m<extra></extra>"
     st.plotly_chart(fig3, use_container_width=True)
 else:
     st.write("Aucune donnée pour la première mesure quotidienne.")
@@ -129,15 +129,17 @@ if not df_comparison.empty:
             legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="center", x=0.5),
             xaxis=dict(
                 range=["2000-01-01", "2000-12-31"],
-                tickformat="%d %B",  # Jour et mois uniquement
+                tickformat="%B",  # Affiche uniquement jour et mois
                 tickangle=-45,
                 side="bottom",
-                title=None
+                title=None,
+                dtick="M1"
             ),
-            hovermode="x unified"
+            hovermode="x unified"  # Active le tooltip unifié
         )
+        # Pour chaque trace, on définit un hovertemplate qui affiche le nom de la trace (année) et le niveau d'eau.
         for trace in fig4.data:
-            trace.hovertemplate = f"Date : %{{x|%d %B}}<br>Niveau : %{{y:.2f}} m<extra></extra>"
+            trace.hovertemplate = "%{data.name} : %{y:.2f} m<extra></extra>"
         st.plotly_chart(fig4, use_container_width=True)
     else:
         st.write("Aucune donnée pour les années sélectionnées.")

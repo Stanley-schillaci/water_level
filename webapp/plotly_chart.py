@@ -13,7 +13,8 @@ def create_interactive_chart_plotly(
     margin_value: float,
     chart_width: int = 800,
     chart_height: int = 400,
-    color: str = "#1f77b4"
+    color: str = "#1f77b4",
+    dtick: str = None
 ):
     """Create a basic interactive line chart with uniform hover."""
     y_min = data[y_field].min() - margin_value
@@ -35,7 +36,7 @@ def create_interactive_chart_plotly(
         margin=dict(l=20, r=20, t=20, b=20),
         xaxis=dict(
             range=[x_min, x_max],
-            dtick="M1",
+            dtick=dtick,
             tickformat=x_axis_format,
             tickangle=-45,
             side="bottom",
@@ -49,7 +50,6 @@ def create_interactive_chart_plotly(
     fig.update_traces(
         line=dict(width=2),
         hovertemplate=(
-            "<b>Date:</b> %{x|%d %B %Y}<br>"
             "<b>Niveau:</b> %{y:.2f} m"
         ),
         showlegend=False
