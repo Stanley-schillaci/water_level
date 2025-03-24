@@ -130,7 +130,7 @@ if not df_comparison.empty:
             xaxis=dict(
                 range=["2000-01-01", "2000-12-31"],
                 tickformat="%B",  # Affiche uniquement jour et mois
-                hoverformat="%d %B %Y",
+                hoverformat="%d %B",
                 tickangle=-45,
                 side="bottom",
                 title=None,
