@@ -1,8 +1,6 @@
 import pandas as pd
-import plotly.express as px
-import locale
-
-#locale.setlocale(locale.LC_TIME, 'fr_FR.UTF-8')
+import plotly.graph_objects as go
+from typing import List, Dict
 
 def create_interactive_chart_plotly(
     data: pd.DataFrame,
@@ -12,46 +10,105 @@ def create_interactive_chart_plotly(
     y_axis_label: str,
     margin_value: float,
     chart_width: int = 800,
-    chart_height: int = 400,
-    color: str = "#1f77b4",
-    dtick: str = None
+    chart_height: int = 800,
+    slope_threshold: float = 0.03,     # pente max pour normalisation
+    segment_size_hours: int = 1,       # taille d'un segment en heures
+    horizontal_lines=None              # DataFrame ou liste de dicts
 ):
-    """Create a basic interactive line chart with uniform hover."""
-    y_min = data[y_field].min() - margin_value
-    y_max = data[y_field].max() + margin_value
-    x_min = data[x_field].min()
-    x_max = data[x_field].max()
+    """
+    Trace chaque segment de durée `segment_size_hours` avec un gradient saturé :
+      - pour s < 0 : du rouge foncé (faible baisse) au rouge vif (forte baisse)
+      - pour s > 0 : du vert foncé (faible montée) au vert vif (forte montée)
+    """
+    # — Préparation et rééchantillonnage —
+    df = data.copy()
+    df[x_field] = pd.to_datetime(df[x_field])
+    df = (
+        df
+        .set_index(x_field)
+        .resample(f"{segment_size_hours}h")
+        .mean()[[y_field]]
+        .dropna()
+        .reset_index()
+        .sort_values(x_field)
+    )
 
-    fig = px.line(
-        data_frame=data,
-        x=x_field,
-        y=y_field,
-        color_discrete_sequence=[color],
-        labels={y_field: "Water Level"}
-    )
-    fig.update_layout(
-        hovermode='x unified',
-        width=chart_width,
-        height=chart_height,
-        margin=dict(l=20, r=20, t=20, b=20),
-        xaxis=dict(
-            range=[x_min, x_max],
-            dtick=dtick,
-            tickformat=x_axis_format,
-            tickangle=-45,
-            side="bottom",
-            title=None
-        ),
-        yaxis=dict(
-            range=[y_min, y_max],
-            title=y_axis_label
-        )
-    )
-    fig.update_traces(
-        line=dict(width=2),
+    # — Calcul des pentes —
+    df['delta'] = df[y_field].diff()
+    df['slope'] = df['delta'] / segment_size_hours
+
+    # — Construction des segments —
+    segments = []
+    for i in range(1, len(df)):
+        segments.append({
+            'x':     [df.loc[i-1, x_field], df.loc[i, x_field]],
+            'y':     [df.loc[i-1, y_field], df.loc[i, y_field]],
+            'slope': df.loc[i, 'slope']
+        })
+
+    # — Mapping pente → couleur saturée —
+    def slope_to_color(s):
+        # normaliser dans [-1,1]
+        v = max(min(s / slope_threshold, 1), -1)
+        if v >= 0:
+            # faible montée = vert foncé (0,150,0) → forte montée = vert vif (0,255,0)
+            g = int(150 + 105 * v)
+            return f"rgb(0,{g},0)"
+        else:
+            # faible baisse = rouge foncé (150,0,0) → forte baisse = rouge vif (255,0,0)
+            r = int(150 + 105 * (-v))
+            return f"rgb({r},0,0)"
+
+    # — Construction de la figure —
+    fig = go.Figure()
+    for seg in segments:
+        fig.add_trace(go.Scatter(
+            x=seg['x'], y=seg['y'],
+            mode='lines',
+            line=dict(color=slope_to_color(seg['slope']), width=3),
+            hoverinfo='skip',
+            showlegend=False
+        ))
+
+    # — Trace invisible pour le tooltip —
+    fig.add_trace(go.Scatter(
+        x=df[x_field], y=df[y_field],
+        mode='markers',
+        marker=dict(size=20, color='rgba(0,0,0,0)'),
+        customdata=df['slope'],
         hovertemplate=(
-            "<b>Niveau:</b> %{y:.2f} m"
+            "Date : %{x|%d %b %Y %H:%M}<br>"
+            "Hauteur : %{y:.2f} m<br>"
+            "Pente : %{customdata:.3f} m/h<extra></extra>"
         ),
         showlegend=False
+    ))
+
+    # — Layout —
+    y_min, y_max = df[y_field].min() - margin_value, df[y_field].max() + margin_value
+    x_min, x_max = df[x_field].min(), df[x_field].max()
+    fig.update_layout(
+        hovermode='closest',
+        width=chart_width, height=chart_height,
+        margin=dict(l=20, r=20, t=20, b=20),
+        xaxis=dict(range=[x_min, x_max], tickformat=x_axis_format, tickangle=-45, title=None),
+        yaxis=dict(range=[y_min, y_max], title=y_axis_label)
     )
+
+    # — Lignes de seuil —
+    lines: List[Dict] = []
+    if horizontal_lines is not None:
+        if isinstance(horizontal_lines, pd.DataFrame):
+            lines = horizontal_lines.to_dict('records')
+        else:
+            lines = horizontal_lines
+    for line in lines:
+        fig.add_hline(
+            y=line['value'],
+            line_color=line['color'],
+            line_dash=line['dash_style'],
+            annotation_text=line['name'],
+            annotation_position='top left'
+        )
+
     return fig

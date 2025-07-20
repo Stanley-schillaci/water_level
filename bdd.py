@@ -13,10 +13,16 @@ if not logger.handlers:
 
 DB_PATH = "niveau_eau.db"
 
-def init_db(db_path=DB_PATH):
-    """Initialize DB with a unique datetime_event."""
+def init_db(db_path: str = DB_PATH):
+    """
+    Initialise la base de données :
+    - Création de la table water_level si elle n'existe pas encore.
+    - Création de la table threshold_line pour les lignes de seuil, avec description longue.
+    """
     with sqlite3.connect(db_path) as conn:
         cursor = conn.cursor()
+
+        # Table des niveaux d'eau
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS water_level (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -25,8 +31,26 @@ def init_db(db_path=DB_PATH):
             value REAL,
             unit TEXT,
             UNIQUE(datetime_event)
-        )
+        );
         """)
+
+        # Table des lignes de seuil (horizontal lines), avec description longue
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS threshold_line (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            value REAL NOT NULL,
+            color TEXT NOT NULL DEFAULT '#1f77b4',
+            dash_style TEXT NOT NULL DEFAULT 'dash',
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            deleted_at DATETIME,
+            is_deleted INTEGER NOT NULL DEFAULT 0
+        );
+        """)
+
+        conn.commit()
 
 def record_exists(date_str, hour_str, db_path=DB_PATH):
     """Check if record for given date/hour exists."""
