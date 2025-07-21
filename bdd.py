@@ -2,6 +2,7 @@ import sqlite3
 import logging
 import pandas as pd
 from datetime import datetime
+from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
@@ -47,6 +48,20 @@ def init_db(db_path: str = DB_PATH):
             updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             deleted_at DATETIME,
             is_deleted INTEGER NOT NULL DEFAULT 0
+        );
+        """)
+
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS gpt_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            model TEXT,
+            prompt TEXT,
+            response TEXT,
+            prompt_tokens INTEGER,
+            completion_tokens INTEGER,
+            total_tokens INTEGER,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            type TEXT NOT NULL DEFAULT 'tendance'  -- nouveau champ
         );
         """)
 
@@ -120,3 +135,85 @@ def get_first_measure_data(db_path=DB_PATH):
         ORDER BY w.date_event ASC
         """
         return pd.read_sql_query(query, conn)
+    
+def log_gpt_call(model, prompt, response, prompt_tokens, completion_tokens, total_tokens, type="tendance", db_path=DB_PATH):
+    with sqlite3.connect(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO gpt_logs (model, prompt, response, prompt_tokens, completion_tokens, total_tokens, type)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (
+            model,
+            prompt,
+            response,
+            prompt_tokens,
+            completion_tokens,
+            total_tokens,
+            type
+        ))
+        conn.commit()
+
+def should_generate_commentary(db_path=DB_PATH):
+    """
+    Autorise une génération 'tendance' si :
+    - la dernière remonte à plus de 6h
+    - et moins de 10 appels de ce type aujourd'hui
+    Renvoie (bool, dernière réponse du type 'tendance').
+    """
+    with sqlite3.connect(db_path) as conn:
+        cursor = conn.cursor()
+
+        # 1. Dernière génération du type 'tendance'
+        cursor.execute("""
+            SELECT created_at, response
+            FROM gpt_logs
+            WHERE type = 'tendance'
+            ORDER BY created_at DESC
+            LIMIT 1
+        """)
+        row = cursor.fetchone()
+        if row:
+            last_time_str, last_response = row
+            last_time = datetime.strptime(last_time_str, "%Y-%m-%d %H:%M:%S")
+        else:
+            return True, None  # jamais généré => autorisé
+
+        # 2. Vérifier si au moins 6h se sont écoulées
+        now = datetime.now()
+        delta = now - last_time
+        if delta < timedelta(hours=6):
+            # 3. Vérifier s'il y a déjà 10 générations aujourd'hui (du même type)
+            cursor.execute("""
+                SELECT COUNT(*)
+                FROM gpt_logs
+                WHERE type = 'tendance'
+                  AND DATE(created_at) = DATE('now')
+            """)
+            count_today = cursor.fetchone()[0]
+            if count_today >= 10:
+                return False, last_response
+            else:
+                return False, last_response
+
+        return True, None
+    
+def should_generate_annual_comparison(db_path=DB_PATH):
+    """
+    Autorise une seule génération 'comparaison_annuelle' par jour.
+    Renvoie (do_generate, last_comment).
+    """
+    with sqlite3.connect(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT response
+            FROM gpt_logs
+            WHERE type = 'comparaison_annuelle'
+              AND DATE(created_at) = DATE('now')
+            ORDER BY created_at DESC
+            LIMIT 1
+        """)
+        row = cursor.fetchone()
+        if row:
+            return False, row[0]
+        else:
+            return True, None

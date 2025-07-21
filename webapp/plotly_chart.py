@@ -1,6 +1,8 @@
 import pandas as pd
 import plotly.graph_objects as go
 from typing import List, Dict
+import numpy as np
+from sklearn.linear_model import LinearRegression
 
 def create_interactive_chart_plotly(
     data: pd.DataFrame,
@@ -110,5 +112,27 @@ def create_interactive_chart_plotly(
             annotation_text=line['name'],
             annotation_position='top left'
         )
+
+        # — Régression linéaire (tendance globale) —
+    if len(df) >= 2:
+        # Transformer les dates en valeurs numériques
+        df['_ts'] = df[x_field].astype(np.int64) // 10**9  # timestamp en secondes
+        X = df[['_ts']].values
+        y = df[y_field].values
+
+        model = LinearRegression()
+        model.fit(X, y)
+        y_pred = model.predict(X)
+
+        # Tracer la tendance
+        fig.add_trace(go.Scatter(
+            x=df[x_field],
+            y=y_pred,
+            mode='lines',
+            line=dict(color='black', width=2, dash='dot'),
+            name="Tendance linéaire",
+            hoverinfo='skip',
+            showlegend=False
+        ))
 
     return fig

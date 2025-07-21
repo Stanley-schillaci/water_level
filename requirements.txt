@@ -3,3 +3,7 @@ PyYAML
 pandas
 streamlit
 plotly
+openai
+dotenv
+scikit-learn
+numpy

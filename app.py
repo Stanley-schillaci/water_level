@@ -18,7 +18,7 @@ from webapp.ui_components import inject_kpi_style, render_kpi
 from webapp.plotly_chart import create_interactive_chart_plotly
 from webapp.colors import build_year_color_map
 from webapp.kpi import compute_kpis  # Utilisation du calcul des KPI
-# from webapp.llm_commentary_local import generate_commentary
+from webapp.llm import generate_commentary, generate_annual_comparison
 from update_missing_day import update_db
 from bdd import init_db
 
@@ -51,12 +51,12 @@ else:
 # --- KPI globaux ---
 if not df_all.empty:
     kpi_data = compute_kpis(df_all)
-    kpi_date  = kpi_data.get("kpi_date")
+    kpi_date = kpi_data.get("kpi_date")
     kpi_level = kpi_data.get("kpi_level")
-    kpi_j1    = kpi_data.get("kpi_j1")
-    kpi_j3    = kpi_data.get("kpi_j3")
-    kpi_s1    = kpi_data.get("kpi_s1")
-    kpi_7j    = kpi_data.get("kpi_7j")
+    kpi_j1 = kpi_data.get("kpi_j1")
+    kpi_j3 = kpi_data.get("kpi_j3")
+    kpi_s1 = kpi_data.get("kpi_s1")
+    kpi_7j = kpi_data.get("kpi_7j")
     kpi_y1 = kpi_data.get("kpi_y1")
     kpi_y2 = kpi_data.get("kpi_y2")
     kpi_y3 = kpi_data.get("kpi_y3")
@@ -66,16 +66,12 @@ else:
 # Seuils actifs
 thresholds = get_threshold_lines()
 
-# def get_local_comment(kpi_data, thresholds_df):
-#     thr_list = [
-#         dict(name=th.name, description=th.description, value=th.value)
-#         for th in thresholds_df.itertuples()
-#     ]
-#     return generate_commentary(kpi_data, thr_list)
-
-# commentary = get_local_comment(kpi_data, thresholds)
-# st.markdown("## 📝 Analyse automatique (locale)")
-# st.write(commentary)
+def get_local_comment(kpi_data, thresholds_df):
+    thr_list = [
+        dict(name=th.name, description=th.description, value=th.value)
+        for th in thresholds_df.itertuples()
+    ]
+    return generate_commentary(kpi_data, thr_list)
 
 # === Section 1 : Tendance actuelle ===
 
@@ -87,6 +83,8 @@ else:
     emoji = "🟡"
 
 st.markdown(f"## {emoji} Tendance actuelle")
+commentary = get_local_comment(kpi_data, thresholds)
+st.markdown("#### ✨ " + commentary)
 
 # Première rangée de 3 KPI
 col1, col2, col3 = st.columns(3)
@@ -142,6 +140,9 @@ st.markdown("---")
 
 # === Section 2 : Comparaison annuelle ===
 st.markdown("## 📈 Comparaison annuelle")
+
+annual_comment = generate_annual_comparison(kpi_data)
+st.markdown("#### ✨ " + annual_comment)
 # KPI annuel
 d1, d2, d3 = st.columns(3)
 with d1:
