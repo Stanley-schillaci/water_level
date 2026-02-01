@@ -1,9 +1,11 @@
 requests
 PyYAML
 pandas
-streamlit
+streamlit>=1.40.0
 plotly
 openai
 dotenv
 scikit-learn
 numpy
+altair>=5.0.0
+prophet

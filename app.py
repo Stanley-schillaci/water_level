@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.express as px
 import locale
 from datetime import timedelta, datetime
+import plotly.graph_objects as go
 
 # locale.setlocale(locale.LC_TIME, 'fr_FR.UTF-8')
 
@@ -130,7 +131,7 @@ if not df_all.empty:
             # tu peux régler segment_size_hours ici si besoin
             horizontal_lines=thresholds
         )
-        st.plotly_chart(fig_recent, use_container_width=True)
+        st.plotly_chart(fig_recent, width='stretch')
     else:
         st.write(f"Aucune donnée disponible pour les {days} derniers jours.")
 else:
@@ -211,7 +212,7 @@ if not df_comparison.empty:
                 annotation_text=th.name,
                 annotation_position="top left"
             )
-        st.plotly_chart(fig4, use_container_width=True)
+        st.plotly_chart(fig4, width='stretch')
     else:
         st.write("Aucune donnée pour les années sélectionnées.")
 else:
@@ -258,9 +259,48 @@ if not df_daily.empty:
             annotation_text=th.name,
             annotation_position="top left"
         )
-    st.plotly_chart(fig3, use_container_width=True)
+    st.plotly_chart(fig3, width='stretch')
 else:
     st.write("Aucune donnée pour la première mesure quotidienne.")
+
+from webapp.forecast import forecast_water_level
+
+st.markdown("## 🔮 Prévision jusqu’à la fin de l’année")
+
+# Forecast uniquement si données suffisantes
+if not df_all.empty and len(df_all) > 100:
+    forecast_df = forecast_water_level(df_all)
+    forecast_df = forecast_df[forecast_df["ds"] > pd.Timestamp.now()]  # que le futur
+
+    fig_forecast = go.Figure()
+    fig_forecast.add_trace(go.Scatter(
+        x=df_all["datetime_event"], y=df_all["value"],
+        mode="lines", name="Historique"
+    ))
+    fig_forecast.add_trace(go.Scatter(
+        x=forecast_df["ds"], y=forecast_df["yhat"],
+        mode="lines", name="Prévision",
+        line=dict(dash="dot", color="black")
+    ))
+    for th in thresholds.itertuples():
+        fig_forecast.add_hline(
+            y=th.value,
+            line_color=th.color,
+            line_dash=th.dash_style,
+            annotation_text=th.name,
+            annotation_position="top left"
+        )
+
+    fig_forecast.update_layout(
+        title="Prévision du niveau d’eau",
+        xaxis_title="Date",
+        yaxis_title="Niveau (mNGF)",
+        hovermode="x unified",
+        margin=dict(l=20, r=20, t=40, b=20)
+    )
+    st.plotly_chart(fig_forecast, width='stretch')
+else:
+    st.info("Pas assez de données pour générer une prévision.")
 
 # --- Interface de gestion des lignes de seuil ---
 
