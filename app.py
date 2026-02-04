@@ -269,36 +269,41 @@ st.markdown("## 🔮 Prévision jusqu’à la fin de l’année")
 
 # Forecast uniquement si données suffisantes
 if not df_all.empty and len(df_all) > 100:
-    forecast_df = forecast_water_level(df_all)
-    forecast_df = forecast_df[forecast_df["ds"] > pd.Timestamp.now()]  # que le futur
+    try:
+        forecast_df = forecast_water_level(df_all)
+        forecast_df = forecast_df[forecast_df["ds"] > pd.Timestamp.now()]  # que le futur
 
-    fig_forecast = go.Figure()
-    fig_forecast.add_trace(go.Scatter(
-        x=df_all["datetime_event"], y=df_all["value"],
-        mode="lines", name="Historique"
-    ))
-    fig_forecast.add_trace(go.Scatter(
-        x=forecast_df["ds"], y=forecast_df["yhat"],
-        mode="lines", name="Prévision",
-        line=dict(dash="dot", color="black")
-    ))
-    for th in thresholds.itertuples():
-        fig_forecast.add_hline(
-            y=th.value,
-            line_color=th.color,
-            line_dash=th.dash_style,
-            annotation_text=th.name,
-            annotation_position="top left"
+        fig_forecast = go.Figure()
+        fig_forecast.add_trace(go.Scatter(
+            x=df_all["datetime_event"], y=df_all["value"],
+            mode="lines", name="Historique"
+        ))
+        fig_forecast.add_trace(go.Scatter(
+            x=forecast_df["ds"], y=forecast_df["yhat"],
+            mode="lines", name="Prévision",
+            line=dict(dash="dot", color="black")
+        ))
+        for th in thresholds.itertuples():
+            fig_forecast.add_hline(
+                y=th.value,
+                line_color=th.color,
+                line_dash=th.dash_style,
+                annotation_text=th.name,
+                annotation_position="top left"
+            )
+
+        fig_forecast.update_layout(
+            title="Prévision du niveau d'eau",
+            xaxis_title="Date",
+            yaxis_title="Niveau (mNGF)",
+            hovermode="x unified",
+            margin=dict(l=20, r=20, t=40, b=20)
         )
-
-    fig_forecast.update_layout(
-        title="Prévision du niveau d’eau",
-        xaxis_title="Date",
-        yaxis_title="Niveau (mNGF)",
-        hovermode="x unified",
-        margin=dict(l=20, r=20, t=40, b=20)
-    )
-    st.plotly_chart(fig_forecast, width='stretch')
+        st.plotly_chart(fig_forecast, width='stretch')
+    except Exception as e:
+        st.error(f"Erreur lors de la prévision : {e}")
+        import traceback
+        st.code(traceback.format_exc())
 else:
     st.info("Pas assez de données pour générer une prévision.")
 

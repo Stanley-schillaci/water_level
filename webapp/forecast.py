@@ -11,7 +11,7 @@ def forecast_water_level(df_all, days_ahead=160):
     df = df[["ds", "y"]].dropna()
     
     model = Prophet(daily_seasonality=True, yearly_seasonality=True)
-    model.fit(df)
+    model.fit(df, suppress_logging=True)
 
     future = model.make_future_dataframe(periods=days_ahead)
     forecast = model.predict(future)

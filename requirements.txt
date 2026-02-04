@@ -4,7 +4,7 @@ pandas
 streamlit>=1.40.0
 plotly
 openai
-dotenv
+python-dotenv
 scikit-learn
 numpy
 altair>=5.0.0
