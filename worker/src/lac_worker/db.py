@@ -194,3 +194,45 @@ def get_missing_days(
         datetime.strptime(r["d"], "%Y-%m-%d").strftime("%d-%m-%Y")
         for r in rows
     ]
+
+
+# --- gpt_logs helpers -------------------------------------------------------
+
+
+def log_gpt_call(
+    db_path: Path,
+    model: str,
+    prompt: str,
+    response: str,
+    prompt_tokens: int,
+    completion_tokens: int,
+    total_tokens: int,
+    kind: str,
+) -> None:
+    """Persist an LLM call. `kind` is 'tendance' or 'comparaison_annuelle'."""
+    with connect(db_path) as conn:
+        conn.execute(
+            """
+            INSERT INTO gpt_logs (
+                model, prompt, response,
+                prompt_tokens, completion_tokens, total_tokens,
+                type
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (model, prompt, response, prompt_tokens, completion_tokens, total_tokens, kind),
+        )
+
+
+def get_last_gpt_response(db_path: Path, kind: str) -> str | None:
+    """Return the most recent response of given kind, or None if no row matches."""
+    with connect(db_path) as conn:
+        row = conn.execute(
+            """
+            SELECT response FROM gpt_logs
+            WHERE type = ?
+            ORDER BY created_at DESC, id DESC
+            LIMIT 1
+            """,
+            (kind,),
+        ).fetchone()
+    return row["response"] if row else None

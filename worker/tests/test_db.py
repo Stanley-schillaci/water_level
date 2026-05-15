@@ -9,9 +9,11 @@ import pytest
 from lac_worker.db import (
     add_measure,
     delete_empty_day,
+    get_last_gpt_response,
     get_missing_days,
     init_db,
     list_empty_days,
+    log_gpt_call,
     measure_exists,
     upsert_empty_day,
 )
@@ -175,3 +177,45 @@ def test_get_missing_days_excludes_empty_days(tmp_db: Path) -> None:
     result = get_missing_days(tmp_db, start_date="2024-01-01", end_date="2024-01-03")
 
     assert result == ["01-01-2024", "03-01-2024"]
+
+
+# --- Task 8: gpt_logs helpers -----------------------------------------------
+
+
+def test_log_gpt_call_inserts_row(empty_initialized_db, tmp_db: Path) -> None:
+    log_gpt_call(
+        tmp_db,
+        model="gpt-4o",
+        prompt="hello",
+        response="world",
+        prompt_tokens=10,
+        completion_tokens=2,
+        total_tokens=12,
+        kind="tendance",
+    )
+
+    row = empty_initialized_db.execute(
+        "SELECT model, prompt, response, total_tokens, type FROM gpt_logs"
+    ).fetchone()
+    assert row["model"] == "gpt-4o"
+    assert row["prompt"] == "hello"
+    assert row["response"] == "world"
+    assert row["total_tokens"] == 12
+    assert row["type"] == "tendance"
+
+
+def test_get_last_gpt_response_returns_most_recent_of_type(tmp_db: Path) -> None:
+    init_db(tmp_db)
+    log_gpt_call(tmp_db, "gpt-4o", "p1", "r1", 1, 1, 2, kind="tendance")
+    log_gpt_call(tmp_db, "gpt-4o", "p2", "r2", 1, 1, 2, kind="comparaison_annuelle")
+    log_gpt_call(tmp_db, "gpt-4o", "p3", "r3", 1, 1, 2, kind="tendance")
+
+    last_tendance = get_last_gpt_response(tmp_db, kind="tendance")
+
+    assert last_tendance == "r3"
+
+
+def test_get_last_gpt_response_returns_none_when_no_match(tmp_db: Path) -> None:
+    init_db(tmp_db)
+
+    assert get_last_gpt_response(tmp_db, kind="tendance") is None
