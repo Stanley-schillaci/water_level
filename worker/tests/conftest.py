@@ -34,6 +34,7 @@ def empty_initialized_db(tmp_db: Path) -> Iterator[sqlite3.Connection]:
 
     init_db(tmp_db)
     conn = sqlite3.connect(tmp_db)
+    conn.row_factory = sqlite3.Row
     try:
         yield conn
     finally:

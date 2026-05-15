@@ -5,6 +5,7 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
+from datetime import datetime
 from pathlib import Path
 
 
@@ -82,3 +83,47 @@ def init_db(db_path: Path) -> None:
         conn.execute("PRAGMA journal_mode = WAL")
         for stmt in SCHEMA:
             conn.execute(stmt)
+
+
+# --- water_level operations -------------------------------------------------
+
+
+def _parse_datetime(date_str: str, hour_str: str) -> datetime:
+    """Parse 'dd-mm-YYYY' + 'HH:MM' into a datetime."""
+    return datetime.strptime(f"{date_str} {hour_str}", "%d-%m-%Y %H:%M")
+
+
+def measure_exists(db_path: Path, date_str: str, hour_str: str) -> bool:
+    dt_iso = _parse_datetime(date_str, hour_str).strftime("%Y-%m-%d %H:%M:%S")
+    with connect(db_path) as conn:
+        row = conn.execute(
+            "SELECT 1 FROM water_level WHERE datetime_event = ?", (dt_iso,)
+        ).fetchone()
+    return row is not None
+
+
+def add_measure(
+    db_path: Path,
+    date_str: str,
+    hour_str: str,
+    value: float,
+    unit: str,
+) -> bool:
+    """Insert a measure. Returns True if inserted, False if duplicate."""
+    if measure_exists(db_path, date_str, hour_str):
+        return False
+    dt = _parse_datetime(date_str, hour_str)
+    with connect(db_path) as conn:
+        conn.execute(
+            """
+            INSERT INTO water_level (date_event, datetime_event, value, unit)
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                dt.strftime("%Y-%m-%d"),
+                dt.strftime("%Y-%m-%d %H:%M:%S"),
+                float(value),
+                unit,
+            ),
+        )
+    return True
