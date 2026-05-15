@@ -1,0 +1,27 @@
+[Unit]
+Description=Lac des Saints Peyres — Next.js web app
+After=network.target
+
+[Service]
+Type=simple
+User=app
+Group=app
+WorkingDirectory=/opt/lac/web
+EnvironmentFile=/opt/lac/web/.env.production
+Environment=NODE_ENV=production
+Environment=PORT=3000
+Environment=LAC_DB_PATH=/var/lib/lac/niveau_eau.db
+ExecStart=/usr/bin/npm start
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Hardening
+ProtectSystem=full
+ProtectHome=true
+NoNewPrivileges=true
+ReadWritePaths=/var/lib/lac
+
+[Install]
+WantedBy=multi-user.target

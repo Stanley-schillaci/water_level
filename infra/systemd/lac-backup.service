@@ -1,0 +1,15 @@
+[Unit]
+Description=Lac — daily SQLite backup (local rotation, 7 days kept)
+
+[Service]
+Type=oneshot
+User=app
+Group=app
+ExecStart=/bin/bash -c '\
+  DEST="/var/lib/lac/backups"; \
+  mkdir -p "$DEST"; \
+  sqlite3 /var/lib/lac/niveau_eau.db ".backup $DEST/niveau_eau-$(date +%%Y%%m%%d).db" && \
+  ls -1t $DEST/niveau_eau-*.db | tail -n +8 | xargs -r rm -f \
+'
+StandardOutput=journal
+StandardError=journal

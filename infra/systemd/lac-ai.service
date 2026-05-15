@@ -1,0 +1,21 @@
+[Unit]
+Description=Lac — generate daily AI commentary (GPT-4o)
+After=network.target
+
+[Service]
+Type=oneshot
+User=app
+Group=app
+WorkingDirectory=/opt/lac/worker
+EnvironmentFile=/opt/lac/worker/.env
+Environment=LAC_DB_PATH=/var/lib/lac/niveau_eau.db
+ExecStart=/home/app/.local/bin/uv run lac-ai-refresher
+StandardOutput=journal
+StandardError=journal
+TimeoutStartSec=2min
+
+# Hardening
+ProtectSystem=full
+ProtectHome=read-only
+NoNewPrivileges=true
+ReadWritePaths=/var/lib/lac
