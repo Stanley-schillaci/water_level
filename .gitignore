@@ -175,3 +175,10 @@ cython_debug/
 
 # Superpowers brainstorming temp files
 .superpowers/
+
+# Python venv + DB
+worker/.venv/
+worker/.env
+niveau_eau.db
+niveau_eau.db-wal
+niveau_eau.db-shm
