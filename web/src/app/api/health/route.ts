@@ -9,12 +9,18 @@ export async function GET() {
     ? Math.floor((Date.now() - new Date(last.datetime_event).getTime()) / 60000)
     : null;
   const ok = ageMin !== null && ageMin <= 120;
-  const dbSize = getDb().pragma("page_count * page_size", { simple: true });
+  const db = getDb();
+  const pageCount = db.pragma("page_count", { simple: true });
+  const pageSize = db.pragma("page_size", { simple: true });
+  const dbSizeMb =
+    typeof pageCount === "number" && typeof pageSize === "number"
+      ? Math.round((pageCount * pageSize) / 1024 / 1024)
+      : null;
   return NextResponse.json(
     {
       status: ok ? "ok" : "stale",
       last_measure_age_min: ageMin,
-      db_size_mb: typeof dbSize === "number" ? Math.round(dbSize / 1024 / 1024) : null,
+      db_size_mb: dbSizeMb,
     },
     { status: ok ? 200 : 503 }
   );

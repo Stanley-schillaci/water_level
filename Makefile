@@ -23,17 +23,15 @@ deploy: deploy-worker deploy-web restart
 	@echo "==> Deployment complete. Check status with 'make status VPS=$(VPS)'"
 
 deploy-web:
-	@echo "==> Building Next.js"
-	cd $(WEB_LOCAL) && npm ci --omit=dev && npm run build
-	@echo "==> Rsync to $(VPS):$(WEB_REMOTE)"
+	@echo "==> Rsync sources to $(VPS):$(WEB_REMOTE) (build runs on VPS for native bindings)"
 	rsync -avz --delete \
-		--exclude='.next/cache' \
+		--exclude='.next' \
 		--exclude='node_modules' \
-		--exclude='.env.local' \
+		--exclude='.env*' \
 		--exclude='coverage' \
 		$(WEB_LOCAL)/ $(VPS):$(WEB_REMOTE)/
-	@echo "==> Install prod node_modules on VPS"
-	ssh $(VPS) "cd $(WEB_REMOTE) && npm ci --omit=dev"
+	@echo "==> npm ci + npm run build on VPS"
+	ssh $(VPS) "cd $(WEB_REMOTE) && npm ci && LAC_DB_PATH=/var/lib/lac/niveau_eau.db npm run build"
 
 deploy-worker:
 	@echo "==> Rsync worker to $(VPS):$(WORKER_REMOTE)"

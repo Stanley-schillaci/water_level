@@ -9,7 +9,8 @@ Group=app
 WorkingDirectory=/opt/lac/worker
 EnvironmentFile=/opt/lac/worker/.env
 Environment=LAC_DB_PATH=/var/lib/lac/niveau_eau.db
-ExecStart=/home/app/.local/bin/uv run lac-scraper
+Environment=UV_CACHE_DIR=/var/lib/lac/.uv-cache
+ExecStart=/home/app/.local/bin/uv run --no-sync lac-scraper
 StandardOutput=journal
 StandardError=journal
 TimeoutStartSec=5min

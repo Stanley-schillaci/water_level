@@ -2,7 +2,12 @@ import BottomNav from "./BottomNav";
 import { getLastMeasure } from "@/lib/db";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
-  const last = getLastMeasure();
+  let last: { datetime_event: string; value: number } | null = null;
+  try {
+    last = getLastMeasure();
+  } catch {
+    // DB unavailable (e.g. at build time) — render without "updated N min ago"
+  }
   const ageMin = last
     ? Math.floor((Date.now() - new Date(last.datetime_event).getTime()) / 60000)
     : null;
