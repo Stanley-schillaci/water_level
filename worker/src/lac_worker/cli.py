@@ -36,10 +36,23 @@ def scraper_main() -> int:
 
 
 def ai_refresher_main() -> int:
-    # Implemented in Task 17.
-    raise NotImplementedError("ai_refresher_main is wired up in Task 17")
+    _configure_logging()
+    from openai import OpenAI
+
+    from lac_worker.ai import run_ai_refresher
+
+    settings = get_settings()
+    init_db(settings.db_path)
+    client = OpenAI(api_key=settings.openai_api_key)
+    result = run_ai_refresher(client=client, db_path=settings.db_path)
+    logging.getLogger(__name__).info("ai_refresher done: %s", result)
+    return 0
 
 
 def migrate_main() -> int:
-    # Implemented in Task 19.
-    raise NotImplementedError("migrate_main is wired up in Task 19")
+    _configure_logging()
+    from lac_worker.migrate import migrate_v1_to_v2
+
+    settings = get_settings()
+    migrate_v1_to_v2(settings.db_path)
+    return 0
