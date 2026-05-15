@@ -182,3 +182,11 @@ worker/.env
 niveau_eau.db
 niveau_eau.db-wal
 niveau_eau.db-shm
+
+
+# Next.js
+web/.next/
+web/node_modules/
+web/.env.local
+web/coverage/
+web/next-env.d.ts
