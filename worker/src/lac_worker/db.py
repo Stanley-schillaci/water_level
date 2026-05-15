@@ -5,7 +5,7 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 
@@ -158,3 +158,39 @@ def list_empty_days(db_path: Path) -> list[str]:
     with connect(db_path) as conn:
         rows = conn.execute("SELECT date_event FROM empty_days").fetchall()
     return [r["date_event"] for r in rows]
+
+
+# --- Missing-day computation ------------------------------------------------
+
+
+def get_missing_days(
+    db_path: Path,
+    start_date: str,
+    end_date: str | None = None,
+) -> list[str]:
+    """
+    Return missing days (formatted dd-mm-YYYY) between start_date and end_date inclusive,
+    excluding days already in water_level OR in empty_days.
+
+    start_date / end_date: ISO 'YYYY-MM-DD'. If end_date is None, defaults to today.
+    """
+    if end_date is None:
+        end_date = date.today().isoformat()
+
+    query = """
+    WITH RECURSIVE all_dates(d) AS (
+      SELECT date(?)
+      UNION ALL
+      SELECT date(d, '+1 day') FROM all_dates WHERE d < date(?)
+    )
+    SELECT d FROM all_dates
+    WHERE d NOT IN (SELECT DISTINCT date_event FROM water_level)
+      AND d NOT IN (SELECT date_event FROM empty_days)
+    ORDER BY d
+    """
+    with connect(db_path) as conn:
+        rows = conn.execute(query, (start_date, end_date)).fetchall()
+    return [
+        datetime.strptime(r["d"], "%Y-%m-%d").strftime("%d-%m-%Y")
+        for r in rows
+    ]

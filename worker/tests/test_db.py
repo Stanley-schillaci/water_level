@@ -9,6 +9,7 @@ import pytest
 from lac_worker.db import (
     add_measure,
     delete_empty_day,
+    get_missing_days,
     init_db,
     list_empty_days,
     measure_exists,
@@ -144,3 +145,33 @@ def test_list_empty_days_returns_iso_date_strings(empty_initialized_db, tmp_db: 
     result = list_empty_days(tmp_db)
 
     assert set(result) == {"2021-09-04", "2022-10-19"}
+
+
+# --- Task 7: get_missing_days -----------------------------------------------
+
+
+def test_get_missing_days_returns_all_dates_when_db_empty(tmp_db: Path) -> None:
+    init_db(tmp_db)
+
+    result = get_missing_days(tmp_db, start_date="2024-01-01", end_date="2024-01-03")
+
+    # 3 days, all missing
+    assert result == ["01-01-2024", "02-01-2024", "03-01-2024"]
+
+
+def test_get_missing_days_excludes_days_with_measures(tmp_db: Path) -> None:
+    init_db(tmp_db)
+    add_measure(tmp_db, "02-01-2024", "10:00", 665.0, "mNGF")
+
+    result = get_missing_days(tmp_db, start_date="2024-01-01", end_date="2024-01-03")
+
+    assert result == ["01-01-2024", "03-01-2024"]
+
+
+def test_get_missing_days_excludes_empty_days(tmp_db: Path) -> None:
+    init_db(tmp_db)
+    upsert_empty_day(tmp_db, "2024-01-02")
+
+    result = get_missing_days(tmp_db, start_date="2024-01-01", end_date="2024-01-03")
+
+    assert result == ["01-01-2024", "03-01-2024"]
