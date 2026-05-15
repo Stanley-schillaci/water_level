@@ -12,7 +12,6 @@ from pathlib import Path
 
 from lac_worker.db import connect, init_db, upsert_empty_day
 
-
 logger = logging.getLogger(__name__)
 
 

@@ -10,7 +10,6 @@ from openai import OpenAI
 from lac_worker.db import connect, log_gpt_call
 from lac_worker.kpi import compute_annual_comparison, compute_kpis
 
-
 MODEL = "gpt-4o"
 MAX_TOKENS_COMMENTARY = 180
 MAX_TOKENS_ANNUAL = 100

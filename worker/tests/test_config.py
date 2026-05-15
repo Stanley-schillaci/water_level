@@ -1,11 +1,8 @@
 from __future__ import annotations
 
-import os
-from pathlib import Path
-
 import pytest
 
-from lac_worker.config import Settings, get_settings
+from lac_worker.config import get_settings
 
 
 def test_settings_reads_lac_db_path_from_env(tmp_path, monkeypatch):
