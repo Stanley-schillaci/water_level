@@ -1,5 +1,12 @@
 import type { Kpis } from "@/lib/kpi";
 
+/**
+ * Grille des KPIs "delta" :
+ * - tendance 7 jours en m/j
+ * - delta vs hier, vs il y a 3j, vs sem. dernière
+ *
+ * Le niveau actuel + dernier relevé sont affichés séparément par <LevelHero/>.
+ */
 function Cell({
   label,
   value,
@@ -7,7 +14,7 @@ function Cell({
   unit = "",
 }: {
   label: string;
-  value: number | string | null;
+  value: number | null;
   signed?: boolean;
   unit?: string;
 }) {
@@ -15,26 +22,22 @@ function Cell({
     return (
       <div className="bg-white dark:bg-slate-900 rounded-lg p-3 border border-slate-200 dark:border-slate-800 text-center">
         <div className="text-[10px] uppercase tracking-wide text-slate-500">{label}</div>
-        <div className="text-lg font-bold mt-1">—</div>
+        <div className="text-lg font-bold mt-1 tabular-nums">—</div>
       </div>
     );
   }
   let display: string;
   let color = "";
-  if (typeof value === "number") {
-    if (signed) {
-      display = `${value >= 0 ? "+" : ""}${value.toFixed(3)}`;
-      color = value > 0 ? "text-emerald-600" : value < 0 ? "text-red-600" : "";
-    } else {
-      display = value.toFixed(2);
-    }
+  if (signed) {
+    display = `${value >= 0 ? "+" : ""}${value.toFixed(3)}`;
+    color = value > 0 ? "text-emerald-600" : value < 0 ? "text-red-600" : "";
   } else {
-    display = value;
+    display = value.toFixed(2);
   }
   return (
     <div className="bg-white dark:bg-slate-900 rounded-lg p-3 border border-slate-200 dark:border-slate-800 text-center">
       <div className="text-[10px] uppercase tracking-wide text-slate-500">{label}</div>
-      <div className={`text-lg font-bold mt-1 ${color}`}>
+      <div className={`text-lg font-bold mt-1 tabular-nums ${color}`}>
         {display}
         {unit && <span className="text-xs ml-0.5">{unit}</span>}
       </div>
@@ -43,26 +46,12 @@ function Cell({
 }
 
 export default function KpiGrid({ kpis }: { kpis: Kpis }) {
-  const lastDate = kpis.lastDatetime
-    ? new Date(kpis.lastDatetime).toLocaleString("fr-FR", {
-        day: "2-digit",
-        month: "short",
-        hour: "2-digit",
-        minute: "2-digit",
-      })
-    : null;
   return (
-    <div className="space-y-2 mb-4">
-      <div className="grid grid-cols-3 gap-2">
-        <Cell label="Dernier relevé" value={lastDate} />
-        <Cell label="Niveau" value={kpis.level} unit="m" />
-        <Cell label="Tendance 7j" value={kpis.trend7dMPerDay} signed unit="m/j" />
-      </div>
-      <div className="grid grid-cols-3 gap-2">
-        <Cell label="VS hier" value={kpis.vsJ1} signed unit="m" />
-        <Cell label="VS 3j" value={kpis.vsJ3} signed unit="m" />
-        <Cell label="VS sem." value={kpis.vsS1} signed unit="m" />
-      </div>
+    <div className="grid grid-cols-2 gap-2 mb-4">
+      <Cell label="Tendance 7 j" value={kpis.trend7dMPerDay} signed unit="m/j" />
+      <Cell label="VS hier" value={kpis.vsJ1} signed unit="m" />
+      <Cell label="VS 3 j" value={kpis.vsJ3} signed unit="m" />
+      <Cell label="VS sem." value={kpis.vsS1} signed unit="m" />
     </div>
   );
 }

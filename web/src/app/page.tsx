@@ -1,5 +1,6 @@
 import AIBanner from "@/components/AIBanner";
 import KpiGrid from "@/components/KpiGrid";
+import LevelHero from "@/components/LevelHero";
 import { getLatestAICommentary, getRecentMeasures, getThresholds } from "@/lib/db";
 import { computeKpis } from "@/lib/kpi";
 import DaysSelectorWithChart from "./_DaysSelectorWithChart";
@@ -14,6 +15,7 @@ export default async function NowPage() {
 
   return (
     <div>
+      <LevelHero kpis={kpis} />
       <AIBanner text={banner} />
       <KpiGrid kpis={kpis} />
       <DaysSelectorWithChart

@@ -4,9 +4,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const items = [
-  { href: "/", icon: "💧", label: "Now" },
-  { href: "/annuel", icon: "📈", label: "Annuel" },
-  { href: "/histo", icon: "📊", label: "Histo" },
+  { href: "/", icon: "💧", aria: "Niveau actuel" },
+  { href: "/annuel", icon: "📈", aria: "Comparaison annuelle et historique" },
+  { href: "/options", icon: "⚙️", aria: "Options" },
 ];
 
 export default function BottomNav() {
@@ -21,14 +21,12 @@ export default function BottomNav() {
           <Link
             key={it.href}
             href={it.href}
-            className={`flex-1 flex flex-col items-center text-[11px] py-1 ${
-              active
-                ? "text-blue-600 dark:text-blue-400 font-semibold"
-                : "text-slate-500 dark:text-slate-400"
+            aria-label={it.aria}
+            className={`flex-1 flex items-center justify-center py-2 ${
+              active ? "opacity-100" : "opacity-50"
             }`}
           >
-            <span className="text-xl">{it.icon}</span>
-            {it.label}
+            <span className="text-2xl">{it.icon}</span>
           </Link>
         );
       })}

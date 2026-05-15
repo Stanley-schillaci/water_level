@@ -1,5 +1,16 @@
 @import "tailwindcss";
 
+/*
+ * On override le variant "dark:" de Tailwind 4 pour qu'il s'applique
+ * UNIQUEMENT quand la classe "dark" est présente sur <html>.
+ *
+ * Le script inline dans layout.tsx applique la préférence utilisateur :
+ *   - "light" → pas de classe (mode clair forcé)
+ *   - "dark"  → classe "dark" (mode sombre forcé)
+ *   - "system" (défaut) → classe "dark" si prefers-color-scheme: dark
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @layer base {
   html {
     -webkit-tap-highlight-color: transparent;
@@ -10,9 +21,7 @@
     padding-top: env(safe-area-inset-top);
     padding-bottom: env(safe-area-inset-bottom);
   }
-  @media (prefers-color-scheme: dark) {
-    body {
-      @apply bg-slate-950 text-slate-100;
-    }
+  html.dark body {
+    @apply bg-slate-950 text-slate-100;
   }
 }

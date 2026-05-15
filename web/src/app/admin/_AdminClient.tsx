@@ -91,6 +91,32 @@ export default function AdminClient({
           Déconnexion
         </button>
       </div>
+
+      <div className="rounded-lg bg-blue-50 dark:bg-blue-950/40 border-l-4 border-blue-500 px-4 py-3 text-xs leading-relaxed space-y-2">
+        <p className="font-medium text-sm">ℹ️ À quoi servent les seuils ?</p>
+        <p>
+          Chaque seuil est une <strong>valeur critique en mètres NGF</strong> (ex: <code>663.00</code>) qui est utilisée
+          à deux endroits :
+        </p>
+        <ol className="list-decimal ml-5 space-y-1">
+          <li>
+            <strong>Sur les graphs</strong> — une ligne horizontale en pointillés (couleur et style configurables)
+            apparaît sur tous les graphs pour visualiser à quel niveau se trouve le seuil par rapport au niveau actuel.
+          </li>
+          <li>
+            <strong>Dans le prompt GPT</strong> — chaque seuil (nom + description + valeur) est injecté dans le prompt
+            envoyé à GPT-4o chaque matin pour générer la phrase de tendance. Plus la description est riche,
+            plus l&apos;IA peut nuancer sa recommandation.
+          </li>
+        </ol>
+        <p className="pt-1">
+          <strong>Exemple de description utile</strong> : pour un seuil "Coque touche le fond" à 663 m, écrire dans la description
+          quelque chose comme <em>« À ce niveau, le bateau s&apos;échoue sur le sable. Il faut absolument le déplacer
+          vers la zone profonde près de la digue. »</em> — l&apos;IA pourra alors s&apos;en servir pour conseiller
+          précisément quoi faire.
+        </p>
+      </div>
+
       <ThresholdForm onSaved={refresh} />
       <div className="space-y-2">
         {thresholds.map((t) => (
