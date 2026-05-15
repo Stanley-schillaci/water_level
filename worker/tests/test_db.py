@@ -6,7 +6,14 @@ from pathlib import Path
 
 import pytest
 
-from lac_worker.db import add_measure, init_db, measure_exists
+from lac_worker.db import (
+    add_measure,
+    delete_empty_day,
+    init_db,
+    list_empty_days,
+    measure_exists,
+    upsert_empty_day,
+)
 
 
 def _tables(db_path: Path) -> set[str]:
@@ -87,3 +94,53 @@ def test_measure_exists_returns_false_when_absent(tmp_db: Path) -> None:
     init_db(tmp_db)
 
     assert measure_exists(tmp_db, "10-09-2024", "14:20") is False
+
+
+# --- Task 6: empty_days CRUD ------------------------------------------------
+
+
+def test_upsert_empty_day_inserts_new(empty_initialized_db, tmp_db: Path) -> None:
+    upsert_empty_day(tmp_db, "2021-09-04")
+
+    row = empty_initialized_db.execute(
+        "SELECT date_event, attempts FROM empty_days"
+    ).fetchone()
+    assert row["date_event"] == "2021-09-04"
+    assert row["attempts"] == 1
+
+
+def test_upsert_empty_day_increments_attempts_on_duplicate(empty_initialized_db, tmp_db: Path) -> None:
+    upsert_empty_day(tmp_db, "2021-09-04")
+    upsert_empty_day(tmp_db, "2021-09-04")
+    upsert_empty_day(tmp_db, "2021-09-04")
+
+    row = empty_initialized_db.execute(
+        "SELECT attempts FROM empty_days WHERE date_event = ?",
+        ("2021-09-04",),
+    ).fetchone()
+    assert row["attempts"] == 3
+
+
+def test_delete_empty_day_removes_row(empty_initialized_db, tmp_db: Path) -> None:
+    upsert_empty_day(tmp_db, "2021-09-04")
+
+    delete_empty_day(tmp_db, "2021-09-04")
+
+    count = empty_initialized_db.execute("SELECT COUNT(*) FROM empty_days").fetchone()[0]
+    assert count == 0
+
+
+def test_delete_empty_day_no_op_when_absent(tmp_db: Path) -> None:
+    init_db(tmp_db)
+
+    # Should not raise
+    delete_empty_day(tmp_db, "2021-09-04")
+
+
+def test_list_empty_days_returns_iso_date_strings(empty_initialized_db, tmp_db: Path) -> None:
+    upsert_empty_day(tmp_db, "2021-09-04")
+    upsert_empty_day(tmp_db, "2022-10-19")
+
+    result = list_empty_days(tmp_db)
+
+    assert set(result) == {"2021-09-04", "2022-10-19"}

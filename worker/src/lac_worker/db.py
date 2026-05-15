@@ -127,3 +127,34 @@ def add_measure(
             ),
         )
     return True
+
+
+# --- empty_days operations --------------------------------------------------
+
+
+def upsert_empty_day(db_path: Path, iso_date: str) -> None:
+    """Insert an empty day, or increment attempts if it already exists."""
+    with connect(db_path) as conn:
+        conn.execute(
+            """
+            INSERT INTO empty_days (date_event, first_attempted_at, last_attempted_at, attempts)
+            VALUES (?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 1)
+            ON CONFLICT(date_event) DO UPDATE SET
+                last_attempted_at = CURRENT_TIMESTAMP,
+                attempts = attempts + 1
+            """,
+            (iso_date,),
+        )
+
+
+def delete_empty_day(db_path: Path, iso_date: str) -> None:
+    """Remove an empty-day marker (no-op if absent)."""
+    with connect(db_path) as conn:
+        conn.execute("DELETE FROM empty_days WHERE date_event = ?", (iso_date,))
+
+
+def list_empty_days(db_path: Path) -> list[str]:
+    """Return all empty-day markers as ISO date strings."""
+    with connect(db_path) as conn:
+        rows = conn.execute("SELECT date_event FROM empty_days").fetchall()
+    return [r["date_event"] for r in rows]
