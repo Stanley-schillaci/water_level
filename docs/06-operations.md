@@ -169,14 +169,14 @@ curl -s https://<vps-fqdn>/api/health
 ### Healthcheck en live
 
 ```bash
-curl https://vps-9bc559d8.vps.ovh.net/api/health
+curl https://gothis.duckdns.org/api/health
 ```
 
 HTTP 200 = OK. HTTP 503 = dernière mesure > 120 min (scraping en panne ou API Laetis down).
 
 ### UptimeRobot
 
-Compte gratuit, monitor toutes les 5 min, alerte email si HTTP != 200. Configuration manuelle 1× : https://uptimerobot.com → Add monitor → HTTPS → URL `https://vps-9bc559d8.vps.ovh.net/api/health`.
+Compte gratuit, monitor toutes les 5 min, alerte email si HTTP != 200. Configuration manuelle 1× : https://uptimerobot.com → Add monitor → HTTPS → URL `https://gothis.duckdns.org/api/health`.
 
 ### Logs systemd
 
@@ -222,7 +222,7 @@ ssh lac "systemctl list-timers lac-* --no-pager"
 ### Niveau 1 — vérifier le healthcheck
 
 ```bash
-curl -i https://vps-9bc559d8.vps.ovh.net/api/health
+curl -i https://gothis.duckdns.org/api/health
 ```
 
 - **HTTP 200 OK** → tout va bien
@@ -326,7 +326,7 @@ sudo systemctl start lac-web.service lac-scraper.timer
 ```bash
 ssh lac "sudo apt update && sudo apt upgrade -y && sudo reboot"
 # Attendre 1 min
-curl -i https://vps-9bc559d8.vps.ovh.net/api/health
+curl -i https://gothis.duckdns.org/api/health
 ```
 
 **Fréquence recommandée** : tous les 2-3 mois pour les patchs sécurité.

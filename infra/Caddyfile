@@ -1,0 +1,17 @@
+# Caddyfile prod — Lac des Saints Peyres V2
+#
+# Ce fichier est copié sur le VPS dans /etc/caddy/Caddyfile par bootstrap.sh.
+# Caddy demande automatiquement un cert Let's Encrypt par hostname (port 443).
+#
+# Hostnames servis :
+#   - gothis.duckdns.org : URL principale partagée à papa (PWA installée)
+#   - vps-9bc559d8.vps.ovh.net : URL reverse-DNS OVH gardée en filet de sécurité
+#     (si DuckDNS plante un jour, on a toujours un accès direct)
+#
+# Pour ajouter un domaine perso plus tard, ajouter son hostname à la liste
+# séparée par une virgule, puis « systemctl reload caddy ».
+
+gothis.duckdns.org, vps-9bc559d8.vps.ovh.net {
+    encode gzip
+    reverse_proxy localhost:3000
+}

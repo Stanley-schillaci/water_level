@@ -85,21 +85,26 @@ if [[ -f "${LAC_DB_PATH}" ]]; then
 fi
 
 echo "==> Caddyfile"
-HOSTNAME_GUESS="$(hostname -f 2>/dev/null || hostname || echo localhost)"
-if [[ "${HOSTNAME_GUESS}" == "localhost" || -z "${HOSTNAME_GUESS}" ]]; then
-  HOSTNAME_GUESS=":80"
-fi
-cat > /etc/caddy/Caddyfile <<EOF
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "${SCRIPT_DIR}/Caddyfile" ]]; then
+  # On copie le Caddyfile versionné dans le repo (contient les hostnames de prod,
+  # ex: gothis.duckdns.org + le reverse-DNS OVH en filet de sécurité).
+  cp "${SCRIPT_DIR}/Caddyfile" /etc/caddy/Caddyfile
+else
+  # Fallback : si on bootstrap sans le repo (ex: curl direct), on génère un
+  # Caddyfile minimal basé sur le hostname auto-détecté.
+  HOSTNAME_GUESS="$(hostname -f 2>/dev/null || hostname || echo :80)"
+  cat > /etc/caddy/Caddyfile <<EOF
 ${HOSTNAME_GUESS} {
     encode gzip
     reverse_proxy localhost:3000
 }
 EOF
+fi
 systemctl enable --now caddy
 systemctl reload caddy || true
 
 echo "==> install systemd units"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [[ -d "${SCRIPT_DIR}/systemd" ]]; then
   cp "${SCRIPT_DIR}/systemd/"*.service "${SCRIPT_DIR}/systemd/"*.timer /etc/systemd/system/
   systemctl daemon-reload

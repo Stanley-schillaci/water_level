@@ -80,7 +80,7 @@ L'**isolation des processus** permet : (1) que le scraping ne dépende pas de la
 ## 🚀 Quick reference
 
 ### URL de prod
-**https://vps-9bc559d8.vps.ovh.net/**
+**https://gothis.duckdns.org/** (l'ancien `https://vps-9bc559d8.vps.ovh.net/` reste actif en filet de sécurité)
 
 ### Coûts mensuels
 ~4,30€ TTC (OVH VPS-1 + OpenAI ~0,10€)
