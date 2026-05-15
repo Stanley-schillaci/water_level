@@ -36,6 +36,10 @@ export default function WaterChart({
       data: l.data.map((p) => [p.x, p.y]),
       showSymbol: false,
       smooth: 0.2,
+      // `color` au niveau série pilote la pastille du tooltip ; sans ça
+      // ECharts utilise une couleur du thème ≠ celle de la ligne.
+      color: l.color ?? (i === 0 ? ACCENT : undefined),
+      itemStyle: { color: l.color ?? (i === 0 ? ACCENT : undefined) },
       lineStyle: { color: l.color ?? (i === 0 ? ACCENT : undefined), width: 2 },
       areaStyle:
         lines.length === 1

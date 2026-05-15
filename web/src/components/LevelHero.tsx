@@ -36,12 +36,12 @@ export default function LevelHero({ kpis }: { kpis: Kpis }) {
 
   return (
     <section className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 mb-4">
-      <div className="flex items-baseline justify-between gap-3">
-        <div className="text-4xl font-bold tracking-tight tabular-nums">
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-4xl font-bold tracking-tight tabular-nums leading-none">
           {kpis.level.toFixed(2)}
           <span className="text-lg ml-1 font-medium text-slate-500">m</span>
         </div>
-        <div className="text-right text-xs text-slate-500 dark:text-slate-400 leading-tight">
+        <div className="text-right text-xs text-slate-500 dark:text-slate-400 leading-snug">
           <div>{longDate} · {time}</div>
           <div className="mt-0.5 opacity-70">{ageLabel}</div>
         </div>

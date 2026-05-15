@@ -1,27 +1,35 @@
 "use client";
 
+import ColoredCurveChart from "./_ColoredCurveChart";
 import DaysSelector from "@/components/DaysSelector";
-import WaterChart, { type ChartThreshold } from "@/components/WaterChart";
-import { useEffect, useMemo, useState } from "react";
+import { type ChartThreshold } from "@/components/WaterChart";
+import { useEffect, useState } from "react";
 
 type Measure = { datetime_event: string; value: number };
 
-// Couleurs selon la tendance (slope m/jour calculé sur la fenêtre affichée)
-const COLOR_UP = "#16a34a";       // vert (niveau monte)
-const COLOR_DOWN = "#dc2626";     // rouge (niveau baisse)
-const COLOR_FLAT = "#64748b";     // gris (stable)
+/**
+ * Taille de bucket (en heures) pour le resampling, adaptée à la fenêtre :
+ * - Petite fenêtre = segments fins (= plus de couleurs)
+ * - Grande fenêtre = segments épais (= performance + lisibilité)
+ */
+function segmentHoursFor(days: number): number {
+  if (days <= 3) return 1;     // segments horaires sur 3j → ~72 segments
+  if (days <= 7) return 2;     // ~84
+  if (days <= 30) return 6;    // ~120
+  if (days <= 90) return 12;   // ~180
+  return 24;                   // 1 segment/jour pour 1 an
+}
 
-// Seuil de "stabilité" en m/jour. En dessous : on considère stable.
-const FLAT_THRESHOLD_M_PER_DAY = 0.01;
-
-function computeSlopeColor(measures: Measure[], windowDays: number): string {
-  if (measures.length < 2) return COLOR_FLAT;
-  const first = measures[0];
-  const last = measures[measures.length - 1];
-  const slope = (last.value - first.value) / windowDays; // m/jour
-  if (slope > FLAT_THRESHOLD_M_PER_DAY) return COLOR_UP;
-  if (slope < -FLAT_THRESHOLD_M_PER_DAY) return COLOR_DOWN;
-  return COLOR_FLAT;
+/**
+ * Seuil de pente (m/heure) au-delà duquel la couleur est saturée :
+ * petite fenêtre = on est sensible aux variations rapides,
+ * grande fenêtre = on lisse pour ne pas tout colorer en rouge vif.
+ */
+function slopeThresholdFor(days: number): number {
+  if (days <= 3) return 0.03;
+  if (days <= 7) return 0.025;
+  if (days <= 30) return 0.015;
+  return 0.01;
 }
 
 export default function DaysSelectorWithChart({
@@ -29,7 +37,6 @@ export default function DaysSelectorWithChart({
 }: {
   thresholds: ChartThreshold[];
 }) {
-  // Par défaut : 3 jours (au lieu de 7)
   const [days, setDays] = useState<number>(() => {
     if (typeof window === "undefined") return 3;
     const stored = window.localStorage.getItem("lac-days");
@@ -49,26 +56,17 @@ export default function DaysSelectorWithChart({
     }
   }, [days]);
 
-  const lineColor = useMemo(
-    () => computeSlopeColor(measures, days),
-    [measures, days]
-  );
-
   return (
     <>
       <DaysSelector value={days} onChange={setDays} />
-      <WaterChart
-        lines={[
-          {
-            name: "Niveau",
-            color: lineColor,
-            data: measures.map((m) => ({ x: m.datetime_event, y: m.value })),
-          },
-        ]}
+      <ColoredCurveChart
+        measures={measures}
         thresholds={thresholds}
+        segmentSizeHours={segmentHoursFor(days)}
+        slopeThreshold={slopeThresholdFor(days)}
         height={300}
       />
-      {loading && <p className="text-xs text-slate-500 mt-2">Chargement...</p>}
+      {loading && <p className="text-xs text-slate-500 mt-2">Chargement…</p>}
     </>
   );
 }

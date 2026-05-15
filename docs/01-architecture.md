@@ -43,7 +43,7 @@ L'application est composée de **3 processus indépendants** qui tournent sur **
 │                                                       │                                │
 │   ┌────────────────────────────────────┐             │                                 │
 │   │ lac-web.service (Next.js 15)        │             │                                │
-│   │ • SSR pages /  /annuel /histo /admin │◀────────────┘                                │
+│   │ • SSR pages / /annuel /admin /options│◀────────────┘                                │
 │   │ • API routes /api/water/* /api/ai/* │                                              │
 │   │ • API mutations /api/thresholds     │                                              │
 │   │ • iron-session (cookie HttpOnly)    │                                              │
@@ -105,18 +105,29 @@ Caddy (reverse proxy, TLS)
   │
   ▼ HTTP
 Next.js (App Router, SSR)
-  ├─ Page / (Now)
+  ├─ Page / (Niveau actuel, émoji 💧)
   │   ├─ getRecentMeasures(7) → KPIs côté serveur
   │   ├─ getLatestAICommentary('tendance') → bannière
-  │   └─ Charts client : fetch /api/water/recent?days=N
-  ├─ Page /annuel
-  │   ├─ getAvailableYears() + computeAnnualKpis() côté serveur
-  │   └─ Charts client : fetch /api/water/yearly?years=...
-  ├─ Page /histo
-  │   └─ Charts client : fetch /api/water/full
-  └─ Page /admin
-      ├─ Si session valide : getThresholds() + AdminClient
-      └─ Sinon : LoginForm → POST /api/auth/login
+  │   ├─ LevelHero (niveau + date dernière mesure)
+  │   └─ ColoredCurveChart côté client : fetch /api/water/recent?days=N
+  │       (courbe segmentée colorée selon la pente locale, palette V1)
+  ├─ Page /annuel (émoji 📈) — 2 sections empilées :
+  │   ├─ Comparaison annuelle :
+  │   │   ├─ getLatestAICommentary('comparaison_annuelle') → bannière
+  │   │   ├─ computeAnnualKpis() côté serveur (VS Y-1, Y-2, Y-3)
+  │   │   └─ AnnualChart côté client : fetch /api/water/yearly?years=...
+  │   └─ Historique complet :
+  │       └─ FullHistoryChart côté client : fetch /api/water/full
+  │           (1 série/année avec palette 6 couleurs)
+  ├─ Page /admin
+  │   ├─ Bloc explicatif "À quoi servent les seuils ?"
+  │   ├─ Si session valide : getThresholds() + AdminClient
+  │   └─ Sinon : LoginForm → POST /api/auth/login
+  └─ Page /options (émoji ⚙️)
+      ├─ Sélecteur thème (système/clair/sombre, localStorage)
+      ├─ Monitoring (dernière mesure, IA, taille DB)
+      ├─ Bouton vers /admin
+      └─ FAQ (7 accordions sur calculs / IA / seuils)
 ```
 
 ### 4. Mutations admin
@@ -223,13 +234,22 @@ water_level/
 │   │   └── apple-touch-icon.png
 │   ├── src/
 │   │   ├── app/                 ← Next.js App Router
-│   │   │   ├── layout.tsx       ← root layout + AppShell
-│   │   │   ├── page.tsx         ← / (Now)
-│   │   │   ├── annuel/page.tsx
-│   │   │   ├── histo/page.tsx
-│   │   │   ├── admin/page.tsx
+│   │   │   ├── layout.tsx       ← root layout + AppShell + bootstrap thème
+│   │   │   ├── page.tsx         ← / (Niveau actuel, émoji 💧)
+│   │   │   ├── _ColoredCurveChart.tsx  ← graph par segment selon pente
+│   │   │   ├── annuel/page.tsx  ← /annuel (Comparaison + Histo, émoji 📈)
+│   │   │   ├── admin/page.tsx   ← /admin (protégé par mdp)
+│   │   │   ├── options/page.tsx ← /options (émoji ⚙️)
 │   │   │   └── api/             ← 9 routes API
-│   │   ├── components/          ← 8 composants UI
+│   │   ├── components/          ← composants UI partagés
+│   │   │   ├── AppShell.tsx
+│   │   │   ├── BottomNav.tsx    ← 3 émojis (💧 📈 ⚙️)
+│   │   │   ├── AIBanner.tsx
+│   │   │   ├── LevelHero.tsx    ← gros niveau actuel + date
+│   │   │   ├── KpiGrid.tsx      ← grille 2×2 des deltas
+│   │   │   ├── DaysSelector.tsx
+│   │   │   ├── YearSelector.tsx
+│   │   │   └── WaterChart.tsx
 │   │   └── lib/
 │   │       ├── db.ts            ← better-sqlite3 + queries
 │   │       ├── kpi.ts           ← computeKpis, computeAnnualKpis

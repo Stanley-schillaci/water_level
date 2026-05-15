@@ -20,19 +20,21 @@ web/
 │   └── apple-touch-icon.png
 ├── src/
 │   ├── app/                      ← App Router
-│   │   ├── layout.tsx            ← root layout + AppShell
+│   │   ├── layout.tsx            ← root layout + AppShell + bootstrap thème
 │   │   ├── globals.css
-│   │   ├── page.tsx              ← /         (Now)
+│   │   ├── page.tsx              ← / (Niveau actuel — émoji 💧)
 │   │   ├── _DaysSelectorWithChart.tsx
+│   │   ├── _ColoredCurveChart.tsx   ← graph coloré par segment (Now)
 │   │   ├── annuel/
-│   │   │   ├── page.tsx          ← /annuel
-│   │   │   └── _AnnualChart.tsx
-│   │   ├── histo/
-│   │   │   ├── page.tsx          ← /histo
-│   │   │   └── _HistoChart.tsx
+│   │   │   ├── page.tsx          ← /annuel (Comparaison annuelle + Histo — émoji 📈)
+│   │   │   ├── _AnnualChart.tsx
+│   │   │   └── _FullHistoryChart.tsx
 │   │   ├── admin/
-│   │   │   ├── page.tsx          ← /admin   (protégé)
+│   │   │   ├── page.tsx          ← /admin (panel admin protégé)
 │   │   │   └── _AdminClient.tsx
+│   │   ├── options/
+│   │   │   ├── page.tsx          ← /options (émoji ⚙️)
+│   │   │   └── _OptionsClient.tsx
 │   │   └── api/                  ← 9 route handlers
 │   │       ├── water/recent/route.ts
 │   │       ├── water/yearly/route.ts
@@ -43,11 +45,12 @@ web/
 │   │       ├── auth/login/route.ts
 │   │       ├── auth/logout/route.ts
 │   │       └── health/route.ts
-│   ├── components/               ← 8 composants UI partagés
-│   │   ├── AppShell.tsx
-│   │   ├── BottomNav.tsx
-│   │   ├── AIBanner.tsx
-│   │   ├── KpiGrid.tsx
+│   ├── components/               ← composants UI partagés
+│   │   ├── AppShell.tsx          ← header + bottom nav
+│   │   ├── BottomNav.tsx         ← 3 émojis (💧 📈 ⚙️)
+│   │   ├── AIBanner.tsx          ← carte bleue avec la phrase IA
+│   │   ├── LevelHero.tsx         ← gros niveau actuel + date dernière mesure
+│   │   ├── KpiGrid.tsx           ← grille 2×2 des deltas
 │   │   ├── DaysSelector.tsx
 │   │   ├── YearSelector.tsx
 │   │   └── WaterChart.tsx
@@ -68,7 +71,7 @@ Next.js App Router fait du **Server-Side Rendering par défaut**. Les composants
 
 **Pourquoi c'est important** :
 - Les **Server Components** peuvent appeler directement `getDb()`, lire la DB SQLite, faire du SSR ultra-rapide
-- Les **Client Components** (charts, selecteurs interactifs) doivent passer par les routes API pour parler à la DB
+- Les **Client Components** (charts, sélecteurs interactifs) doivent passer par les routes API pour parler à la DB
 
 Convention de nommage utilisée : les composants client commencent par `_` (ex: `_DaysSelectorWithChart.tsx`) — c'est juste une convention pour signaler "ce fichier porte le `"use client"`".
 
@@ -76,87 +79,125 @@ Convention de nommage utilisée : les composants client commencent par `_` (ex: 
 
 ## Les 4 pages
 
-### `/` (Now) — `src/app/page.tsx`
+### `/` — émoji 💧 (Niveau actuel)
 
 **Server Component** qui :
-1. Appelle `getRecentMeasures(7)` côté serveur (rapide, lit directement la DB)
+1. Appelle `getRecentMeasures(7)` côté serveur
 2. Calcule les KPIs avec `computeKpis()`
 3. Récupère la phrase IA `getLatestAICommentary('tendance')`
 4. Récupère les seuils `getThresholds()`
-5. Rend : `<AIBanner>` + `<KpiGrid>` + `<DaysSelectorWithChart>`
 
-`DaysSelectorWithChart` est **Client** (interactif) : il garde le N jours sélectionné en `useState` + `localStorage`, fait `fetch('/api/water/recent?days=N')` quand N change.
+Ordre d'affichage (top to bottom) :
+1. **`<AIBanner>`** — phrase IA générée chaque matin
+2. **`<LevelHero>`** — gros bloc avec le niveau actuel en grand + date de la dernière mesure à droite (date + heure + délai relatif)
+3. **`<KpiGrid>`** — grille 2×2 des deltas (Tendance 7 j, VS hier, VS 3 j, VS sem.)
+4. **`<DaysSelectorWithChart>`** — chips 3/7/30/90/365 j + graph
 
-### `/annuel` — `src/app/annuel/page.tsx`
+`DaysSelectorWithChart` est **Client** (interactif) : il garde le N jours en `useState` + `localStorage`, fait `fetch('/api/water/recent?days=N')` quand N change. **Défaut : 3 jours**.
 
-Comparaison superposée des années. Server Component :
-- Récupère les KPIs annuels (`computeAnnualKpis`)
-- Récupère la phrase IA "comparaison_annuelle"
-- Délègue le graph au composant client `_AnnualChart`
+Le graph est rendu par **`<ColoredCurveChart>`** (composant dédié à la page Now) :
+- Resample des mesures par tranches de N heures (1 h pour 3 jours, jusqu'à 24 h pour 1 an).
+- Pour chaque segment, calcul de la pente locale (m/heure).
+- **Chaque segment a sa propre couleur** :
+  - Pente > +threshold → vert vif `rgb(0,255,0)`
+  - Pente > 0 mais < +threshold → vert foncé `rgb(0,150,0)`
+  - Pente < 0 mais > -threshold → rouge foncé `rgb(150,0,0)`
+  - Pente < -threshold → rouge vif `rgb(255,0,0)`
 
-`_AnnualChart` côté client gère la sélection des années (multi-select chips) et fait `fetch('/api/water/yearly?years=2025,2024,2023')`.
+C'est le **même algorithme que la V1 Streamlit** (`webapp/plotly_chart.py::create_interactive_chart_plotly`), porté en TypeScript/ECharts.
 
-**Trick technique** : pour superposer plusieurs années sur le même axe X, on **normalise les dates** à l'année 2000 :
-```typescript
-const mmdd = m.date_event.slice(5);     // '03-15' depuis '2025-03-15'
-return { x: `2000-${mmdd}`, y: m.value };
-```
-Toutes les années deviennent comparables visuellement sur ECharts.
+### `/annuel` — émoji 📈 (Comparaison annuelle + Historique)
 
-### `/histo` — `src/app/histo/page.tsx`
+Cette page contient **deux sections** dans cet ordre :
 
-Vue de l'évolution complète depuis 2021-07-07. Client component fetch `/api/water/full` (toutes les mesures journalières), affichées sur un seul graph avec `dataZoom` ECharts pour explorer une période.
+1. **Comparaison annuelle** — `<AnnualChart>`
+   - Phrase IA "comparaison annuelle" en haut
+   - KPIs annuels (VS Y-1, VS Y-2, VS Y-3) calculés avec `computeAnnualKpis()`
+   - Multi-select chips des années dispos (défaut : 4 dernières)
+   - Graph qui superpose les années sur un axe X normalisé à une année calendaire (les `date_event` sont remplacées par `2000-MM-DD` pour aligner)
 
-### `/admin` — `src/app/admin/page.tsx`
+2. **Historique complet depuis 2021-07-07** — `<FullHistoryChart>`
+   - Une série ECharts par année avec sa propre couleur (palette de 6 couleurs cyclée)
+   - Permet de voir les cycles saisonniers d'un coup d'œil
+   - DataZoom slider en bas pour explorer une période
 
-**Protégée par mot de passe**. Server Component :
-1. Lit la session via `getSession()` (cookie iron-session chiffré)
-2. Si `session.isAdmin === true` : rend `<AdminClient initialThresholds={...} authed={true} />`
-3. Sinon : rend `<AdminClient initialThresholds={[]} authed={false} />` (qui affiche le formulaire de login)
+### `/admin` (protégée par mot de passe)
 
-`_AdminClient` (client) gère :
-- Le formulaire de login → `POST /api/auth/login` → cookie HttpOnly
-- La liste des seuils + boutons modifier/supprimer
-- Le formulaire d'ajout de seuil
+Bloc explicatif "À quoi servent les seuils ?" en tête (explique les 2 usages : graphs + prompt GPT), puis CRUD complet des seuils.
+
+### `/options` — émoji ⚙️
+
+Page client (`_OptionsClient.tsx`) avec 4 sections :
+
+1. **Thème** — radio buttons `Système / Clair / Sombre`, persisté en `localStorage`. Switch immédiat via toggle de la classe `dark` sur `<html>`.
+2. **Monitoring** — état du backend en live :
+   - Dernière mesure (avec point d'état vert/orange/rouge selon l'âge)
+   - Dernière phrase IA tendance + date relative
+   - Dernière phrase IA annuelle + date relative
+   - Mesures stockées (count)
+   - Taille de la DB (MB)
+3. **Administration** — bouton vers `/admin` avec note explicative.
+4. **Comment ça marche ?** — 7 accordions `<details>` qui détaillent les calculs :
+   - D'où viennent les mesures (Laetis API, 20 min)
+   - Comment on calcule VS hier / 3 j / sem.
+   - C'est quoi la Tendance 7 j
+   - Comment fonctionne la comparaison annuelle (avec exemple concret, fenêtre ±3 j)
+   - Que montrent exactement les graphs (les 3 graphs détaillés)
+   - Les 2 phrases IA (tendance + annuelle, génération matinale, stockage en DB)
+   - À quoi servent les seuils
 
 ---
 
-## Les composants UI partagés
+## Composants UI partagés
 
 | Composant | Type | Rôle |
 |---|---|---|
 | `AppShell` | Server | Header sticky "💧 Saints Peyres" + indicateur "Mis à jour il y a N min" + bottom nav |
-| `BottomNav` | Client | Barre nav iOS-style fixe en bas, 3 onglets (Now / Annuel / Histo) + état actif |
+| `BottomNav` | Client | Barre nav iOS-style fixe en bas, **3 émojis seuls** (💧 / 📈 / ⚙️), opacité réduite quand inactif |
 | `AIBanner` | Server | Carte bleue avec ✨ + phrase IA (ou fallback "Pas de commentaire disponible") |
-| `KpiGrid` | Server | Grille 3×2 des KPIs (niveau, deltas, tendance) avec couleurs +/− |
-| `DaysSelector` | Client | Chips tactiles `3j · 7j · 30j · 90j · 365j` (taille tactile 44px Apple) |
+| `LevelHero` | Server | Bloc d'en-tête de la page Now : gros niveau actuel + date/heure de la dernière mesure (alignés) |
+| `KpiGrid` | Server | Grille 2×2 des deltas (Tendance 7 j, VS hier, VS 3 j, VS sem.) — pas de "niveau actuel" ni "dernier relevé" (ils sont dans `<LevelHero>`) |
+| `DaysSelector` | Client | Chips tactiles `3 j · 7 j · 30 j · 90 j · 365 j` |
 | `YearSelector` | Client | Chips d'années toggleables (multi-select) |
-| `WaterChart` | Client | Wrapper ECharts + thresholds overlay + touch gestures |
+| `WaterChart` | Client | Wrapper ECharts générique (multi-lines, seuils, dataZoom) — utilisé pour Annuel + Histo |
+| `ColoredCurveChart` (sous `app/`) | Client | Wrapper ECharts spécifique au Now : courbe segmentée colorée par pente locale |
 
 ---
 
-## Le composant `WaterChart` (le cœur visuel)
+## Le composant `ColoredCurveChart` (graph segmenté par pente)
 
-Wrapper autour de `echarts-for-react`. Gère :
+Spécifique à la page Now, reproduit le comportement Streamlit V1.
 
-1. **Lignes multiples** (1 pour Now/Histo, N pour Annuel)
+**Algorithme** :
+1. Resample les mesures par buckets de `segmentSizeHours` heures (moyenne sur le bucket)
+2. Pour chaque paire de points consécutifs, calcule la pente `(y2-y1) / segmentSizeHours` (m/heure)
+3. Pour chaque segment, mappe la pente à une couleur RGB saturée
+4. Crée une mini-série ECharts par segment (silent: true, hors tooltip)
+5. Une série invisible supplémentaire porte le tooltip groupé + les `markLine` (seuils)
+
+**Paramètres adaptatifs selon la fenêtre** (cf. `_DaysSelectorWithChart`) :
+
+| Fenêtre | `segmentSizeHours` | `slopeThreshold` (m/h) | Nb de segments |
+|---|---|---|---|
+| 3 jours | 1 h | 0.030 | ~72 |
+| 7 jours | 2 h | 0.025 | ~84 |
+| 30 jours | 6 h | 0.015 | ~120 |
+| 90 jours | 12 h | 0.010 | ~180 |
+| 365 jours | 24 h | 0.010 | ~365 |
+
+---
+
+## Le composant `WaterChart` (graph générique)
+
+Utilisé par `/annuel` (les 2 graphs). Wrapper autour de `echarts-for-react`. Gère :
+
+1. **Lignes multiples** (légende activée si > 1 ligne)
 2. **Gradient sous la courbe** quand il n'y a qu'une seule ligne
-3. **Seuils horizontaux** via `markLine` ECharts
+3. **Seuils horizontaux** via `markLine` ECharts sur la 1ère série
 4. **`dataZoom` inside** : pinch-zoom et pan natifs sur mobile
-5. **`touch-action: none`** en CSS pour bloquer le pinch-zoom de la page (sinon conflit avec les gestures du graph)
+5. **`touch-action: none`** en CSS pour bloquer le pinch-zoom de la page
 
-Props :
-```typescript
-type Props = {
-  lines: ChartLine[];          // [{ name, data: [{x, y}], color? }]
-  thresholds?: ChartThreshold[];
-  yLabel?: string;
-  xAxisType?: "time" | "category";
-  height?: number;
-};
-```
-
-**Pourquoi ECharts plutôt que Plotly (V1) ?** Sur iPhone, Plotly intercepte mal les tap → souvent on zoom au lieu de scroller. ECharts a un `dataZoom: [{ type: "inside" }]` qui rend les gestures naturels (pinch = zoom du graph, scroll = scroll de la page).
+**Bug fix important** : `color` est mis à 3 endroits (top-level série + `itemStyle.color` + `lineStyle.color`) pour que le marker du tooltip ait bien la même couleur que la ligne (ECharts utilise `color` au top-level pour le marker, pas `lineStyle.color`).
 
 ---
 
@@ -175,7 +216,7 @@ GET /api/thresholds                 → liste des seuils actifs
 GET /api/health                     → { status, last_measure_age_min, db_size_mb }
 ```
 
-`/api/health` renvoie **HTTP 200** si la dernière mesure date de < 120 min, **HTTP 503** sinon. Utilisé par UptimeRobot pour alerting.
+`/api/health` renvoie **HTTP 200** si la dernière mesure date de < 120 min, **HTTP 503** sinon.
 
 ### Mutations (admin seulement)
 
@@ -187,16 +228,7 @@ POST   /api/auth/login              → cookie de session signée
 POST   /api/auth/logout             → vide le cookie
 ```
 
-**Validation des bodies** : Zod, ex pour `/api/thresholds` :
-```typescript
-const Body = z.object({
-  name: z.string().min(1).max(100),
-  description: z.string().max(500).default(""),
-  value: z.number().min(600).max(700),     // safety : niveau plausible
-  color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
-  dash_style: z.enum(["solid", "dash", "dot", "dashdot", "longdash"]),
-});
-```
+**Validation des bodies** : Zod (range 600-700m, hex color, etc.).
 
 ---
 
@@ -215,157 +247,58 @@ export function getDb(): Database.Database {
 }
 ```
 
-**Important** : `better-sqlite3` est synchrone (pas d'async/await pour les queries DB). Plus rapide qu'un driver async pour SQLite local.
-
-**Queries exposées** :
-- `getRecentMeasures(days)` — pour la page Now et `/api/water/recent`
-- `getFirstMeasurePerDayForYears(years[])` — pour `/api/water/yearly`
-- `getFullHistory()` — pour `/api/water/full`
-- `getAvailableYears()` — années dispos dans la DB
-- `getLastMeasure()` — dernière ligne (pour le header "Mis à jour il y a…")
-- `getThresholds()` — seuils actifs (non soft-deletés)
-- `createThreshold(t)`, `updateThreshold(id, t)`, `deleteThreshold(id)` — CRUD admin
-- `getLatestAICommentary(kind)` — dernière entrée gpt_logs du type donné
+`better-sqlite3` est **synchrone** (pas d'async/await). Plus rapide qu'un driver async pour SQLite local.
 
 ---
 
 ## KPI Layer (`src/lib/kpi.ts`)
 
-**Mirror TypeScript** de `worker/src/lac_worker/kpi.py`. Calcule les mêmes KPIs côté front (pour pouvoir rafraîchir en live sans appeler le worker Python).
-
-Fonctions :
-- `computeKpis(measures: Measure[]): Kpis` — niveau, deltas vs hier/3j/7j, tendance
-- `computeAnnualKpis(measures: Measure[]): AnnualKpis` — vs Y-1, Y-2, Y-3
-
-**Pourquoi dupliquer en Python ET TypeScript ?**
-- Python : pour générer la phrase IA (1× / jour, batch)
-- TypeScript : pour afficher les KPIs en live à chaque requête HTTP
-
-Garder les 2 implémentations séparées évite un appel inter-process à chaque page load.
+**Mirror TypeScript** de `worker/src/lac_worker/kpi.py`. Cf. [03-worker-python.md](03-worker-python.md) section "Module kpi.py" pour les algorithmes détaillés (mêmes formules ici).
 
 ---
 
 ## Auth (`src/lib/auth.ts` + `src/lib/session.ts`)
 
-**Stateless** : pas de table `users`, pas de table `sessions` en DB.
+**Stateless** : pas de table `users`, pas de table `sessions`. Cookie HttpOnly + Secure + SameSite=Strict, chiffré via `iron-session`. Cf. [07-security.md](07-security.md).
 
-```typescript
-// session.ts
-export const sessionOptions: SessionOptions = {
-  password: process.env.SESSION_PASSWORD ?? "...fallback dev...",
-  cookieName: "lac-session",
-  cookieOptions: {
-    secure: process.env.NODE_ENV === "production",
-    httpOnly: true,
-    sameSite: "strict",
-    maxAge: 60 * 60 * 24 * 7,   // 7 jours
-  },
-};
+---
 
-// auth.ts
-export async function getSession() {
-  return getIronSession<SessionData>(await cookies(), sessionOptions);
-}
+## Thème (Système / Clair / Sombre)
 
-export async function requireAdmin() {
-  const s = await getSession();
-  if (!s.isAdmin) return { ok: false, status: 401 };
-  return { ok: true };
-}
-```
+**Implémentation** :
 
-**Comment ça marche** :
-1. User envoie `POST /api/auth/login {password}`
-2. Backend compare avec `process.env.ADMIN_PASSWORD`
-3. Si OK : marque `session.isAdmin = true` et `session.save()` → cookie chiffré HttpOnly Secure SameSite=Strict
-4. Toutes les routes mutations appellent `requireAdmin()` qui décrypte le cookie et vérifie le flag
+1. **Tailwind 4** : on override le variant `dark:` pour qu'il s'applique uniquement quand la classe `.dark` est sur `<html>` :
+   ```css
+   /* globals.css */
+   @custom-variant dark (&:where(.dark, .dark *));
+   ```
 
-**Pourquoi iron-session** : pas de DB, pas de Redis, juste un cookie auto-signé. Parfait pour 1-2 utilisateurs.
+2. **Bootstrap dans `<head>`** (avant le rendu, pour éviter le flash) :
+   ```html
+   <script>
+   const pref = localStorage.getItem('lac-theme') || 'system';
+   const isDark = pref === 'dark' || (pref === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+   if (isDark) document.documentElement.classList.add('dark');
+   </script>
+   ```
 
-**Secrets requis** :
-- `ADMIN_PASSWORD` — le mdp tapé sur `/admin` (actuellement `gothis1234`)
-- `SESSION_PASSWORD` — clé de chiffrement du cookie (32+ chars hex, généré 1× avec `openssl rand -hex 32`)
+3. **Toggle** depuis la page Options : update du `localStorage` + toggle de la classe `dark`.
+
+Conséquence : 3 modes vraiment indépendants.
 
 ---
 
 ## PWA (Progressive Web App)
 
-L'app est **installable** sur l'écran d'accueil iPhone. Mécanisme :
+Voir [05-infrastructure.md](05-infrastructure.md) section PWA pour les détails (manifest, icon-*.png, apple-touch-icon, etc.).
 
-### 1. `public/manifest.webmanifest`
-
-```json
-{
-  "name": "Lac des Saints Peyres",
-  "short_name": "Saints Peyres",
-  "description": "Suivi du niveau d'eau du barrage du lac des Saints Peyres",
-  "start_url": "/",
-  "display": "standalone",
-  "background_color": "#f8fafc",
-  "theme_color": "#2563eb",
-  "orientation": "portrait-primary",
-  "icons": [
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
-  ]
-}
-```
-
-### 2. `<link rel="manifest">` dans `layout.tsx`
-
-Géré via `metadata.manifest` dans Next.js Metadata API.
-
-### 3. `apple-touch-icon.png` (180×180)
-
-iOS Safari l'utilise pour l'icône sur l'écran d'accueil.
-
-### 4. Meta tags
-
-```typescript
-appleWebApp: {
-  capable: true,                  // mode standalone (pas de barre Safari)
-  title: "Saints Peyres",         // titre sur l'écran d'accueil
-  statusBarStyle: "default",
-}
-```
-
-### Comment papa installe la PWA
-
-1. Safari → ouvre `https://vps-9bc559d8.vps.ovh.net/`
-2. Bouton **Partager** (carré avec flèche en haut)
-3. Faire défiler → **"Sur l'écran d'accueil"**
-4. Confirmer → icône droplet bleu apparaît sur l'écran d'accueil
-5. Tap → ouvre l'app en plein écran (pas de barre Safari)
-
-### Pourquoi pas de service worker ?
-
-Un service worker permettrait de cacher l'app pour fonctionnement offline. **On n'en a pas besoin** : si l'app est offline, papa ne peut de toute façon pas avoir des données fraîches. Garder simple.
+L'app est installable depuis Safari iPhone : **Partager → "Sur l'écran d'accueil"**.
 
 ---
 
 ## Mode dark/light
 
-**Automatique** via la media query `prefers-color-scheme` (suivie par les réglages iOS de papa : light le jour, dark le soir).
-
-Implémentation Tailwind :
-```css
-/* globals.css */
-@layer base {
-  body {
-    @apply bg-slate-50 text-slate-900;
-  }
-  @media (prefers-color-scheme: dark) {
-    body {
-      @apply bg-slate-950 text-slate-100;
-    }
-  }
-}
-```
-
-Et dans les composants, classes Tailwind avec préfixe `dark:` :
-```tsx
-<div className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">
-```
+Voir section "Thème" plus haut. Par défaut suit `prefers-color-scheme` ; l'utilisateur peut forcer Clair ou Sombre depuis `/options`.
 
 ---
 
@@ -378,14 +311,6 @@ cd web
 npx vitest run
 ```
 
-Couvre :
-- `computeKpis([])` → tout null
-- `computeKpis(measures)` → deltas corrects vs J-1, J-3, J-7
-- `computeAnnualKpis([])` → tout null
-- `computeAnnualKpis(measures)` → delta vs Y-1 quand mesure il y a 1 an
-
-**Pourquoi pas Playwright pour l'E2E ?** Volontairement non implémenté. Pour 4 pages d'usage perso, les tests visuels en dev + l'iPhone réel valent mieux qu'un E2E qui dort dans une CI.
-
 ---
 
 ## Build et déploiement
@@ -396,27 +321,21 @@ cd web
 npm run dev          # http://localhost:3000, hot reload
 ```
 
-**Build prod (déploiement)** :
-Le `make deploy VPS=lac` (depuis le Mac, dans le repo root) :
-1. Rsync les sources vers le VPS (exclut `.next/`, `node_modules/`, `.env*`)
-2. Sur le VPS : `npm ci` puis `LAC_DB_PATH=... npm run build`
-3. Restart `lac-web.service`
-
-**Pourquoi build sur le VPS** : `better-sqlite3` a des bindings natifs compilés pour Linux x86_64. Si on les compilait sur macOS, ils ne marcheraient pas sur le VPS.
+**Build prod** : `make deploy VPS=lac` depuis le repo root. Le build se fait **sur le VPS** (pas localement) pour que les bindings natifs de `better-sqlite3` correspondent à l'architecture Linux x86_64.
 
 ---
 
 ## Variables d'environnement
 
-`web/.env.local.example` (à copier en `.env.local` pour dev, en `.env.production` sur le VPS) :
+`web/.env.local.example` :
 
 ```bash
-LAC_DB_PATH=../niveau_eau.db                          # chemin vers la DB
-ADMIN_PASSWORD=changeme                               # mdp page /admin
-SESSION_PASSWORD=at-least-32-chars-long-random-here   # secret iron-session
+LAC_DB_PATH=../niveau_eau.db
+ADMIN_PASSWORD=changeme
+SESSION_PASSWORD=at-least-32-chars-long-random-here
 ```
 
-Sur le VPS, ces vars sont chargées par systemd via `EnvironmentFile=/opt/lac/web/.env.production` dans le service unit.
+Sur le VPS : `/opt/lac/web/.env.production` (chargé par systemd via `EnvironmentFile=`).
 
 ---
 

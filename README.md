@@ -55,7 +55,7 @@ L'API publique **`data.niv-eau.fr`** (Laetis, opérateur du barrage) publie le n
 |---|---|---|
 | **scraper.py** (Python) | Récupère les mesures Laetis, écrit dans la DB | Cron toutes les 20 min |
 | **ai-refresher.py** (Python) | Génère la phrase IA via GPT-4o, écrit dans la DB | Cron 1× par jour à 07:00 |
-| **Next.js** (TypeScript) | Sert l'app web (3 vues + admin) | Daemon always-on |
+| **Next.js** (TypeScript) | Sert l'app web (4 pages : 💧 / 📈 / ⚙️ / admin) | Daemon always-on |
 
 L'**isolation des processus** permet : (1) que le scraping ne dépende pas de la consultation web, (2) que la phrase IA soit pré-calculée et donc instantanée à servir, (3) que Next.js n'ait qu'à **lire** la DB.
 

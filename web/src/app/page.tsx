@@ -15,8 +15,8 @@ export default async function NowPage() {
 
   return (
     <div>
-      <LevelHero kpis={kpis} />
       <AIBanner text={banner} />
+      <LevelHero kpis={kpis} />
       <KpiGrid kpis={kpis} />
       <DaysSelectorWithChart
         thresholds={thresholds.map((t) => ({

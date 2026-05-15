@@ -48,10 +48,10 @@ function Cell({
 export default function KpiGrid({ kpis }: { kpis: Kpis }) {
   return (
     <div className="grid grid-cols-2 gap-2 mb-4">
-      <Cell label="Tendance 7 j" value={kpis.trend7dMPerDay} signed unit="m/j" />
-      <Cell label="VS hier" value={kpis.vsJ1} signed unit="m" />
-      <Cell label="VS 3 j" value={kpis.vsJ3} signed unit="m" />
-      <Cell label="VS sem." value={kpis.vsS1} signed unit="m" />
+      <Cell label="Tendance sur 7 jours" value={kpis.trend7dMPerDay} signed unit="m/j" />
+      <Cell label="VS Hier" value={kpis.vsJ1} signed unit="m" />
+      <Cell label="VS il y a 3 jours" value={kpis.vsJ3} signed unit="m" />
+      <Cell label="VS il y a une semaine" value={kpis.vsS1} signed unit="m" />
     </div>
   );
 }
