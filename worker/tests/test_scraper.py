@@ -8,7 +8,7 @@ from unittest.mock import patch
 import pytest
 
 from lac_worker.db import init_db, list_empty_days, upsert_empty_day
-from lac_worker.scraper import process_day
+from lac_worker.scraper import process_day, run_scraper
 
 
 @pytest.fixture
@@ -80,3 +80,47 @@ def test_process_day_idempotent_on_repeat_empty_old_day(initialized_db: Path) ->
             (_iso(old),),
         ).fetchone()
     assert row[0] == 2
+
+
+def test_run_scraper_calls_process_for_each_missing_day(initialized_db: Path) -> None:
+    # No data in DB; missing days = today's date going back to start_date
+    # We use a very recent start_date to keep the loop short.
+    start = (date.today() - timedelta(days=3)).isoformat()
+
+    seen = []
+
+    def fake_process(_db_path, date_str, *, api_base, auth):
+        seen.append(date_str)
+        return 0
+
+    with patch("lac_worker.scraper.process_day", side_effect=fake_process):
+        run_scraper(initialized_db, start_date=start, api_base="x", auth="x")
+
+    # Expect 4 calls : 3 missing days + today (deduplicated, today only once)
+    assert len(seen) == 4
+    assert _ddmmyyyy(date.today()) in seen
+
+
+def test_run_scraper_also_refreshes_last_recorded_day(initialized_db: Path) -> None:
+    # Insert a measure 5 days ago to make it "the last recorded day"
+    five_days_ago = date.today() - timedelta(days=5)
+    from lac_worker.db import add_measure as _add
+    _add(initialized_db, _ddmmyyyy(five_days_ago), "08:00", 665.0, "mNGF")
+
+    seen = []
+
+    def fake_process(_db_path, date_str, *, api_base, auth):
+        seen.append(date_str)
+        return 0
+
+    with patch("lac_worker.scraper.process_day", side_effect=fake_process):
+        run_scraper(
+            initialized_db,
+            start_date=(date.today() - timedelta(days=6)).isoformat(),
+            api_base="x",
+            auth="x",
+        )
+
+    # The last recorded day (5 days ago) should appear in the calls
+    # (refresh pass), even though it has data.
+    assert _ddmmyyyy(five_days_ago) in seen
