@@ -31,7 +31,9 @@ def test_settings_db_path_is_absolute_path(tmp_path, monkeypatch):
     assert s.db_path.is_absolute()
 
 
-def test_settings_missing_required_env_raises(monkeypatch):
+def test_settings_missing_required_env_raises(tmp_path, monkeypatch):
+    # chdir into a clean directory so any local .env is not picked up
+    monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("LAC_DB_PATH", raising=False)
     monkeypatch.delenv("LAC_API_AUTH", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)

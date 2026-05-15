@@ -1,12 +1,10 @@
-"""Settings loaded from environment variables (and .env when present)."""
+"""Settings loaded from environment variables."""
 
 from __future__ import annotations
 
 import os
 from dataclasses import dataclass
 from pathlib import Path
-
-from dotenv import load_dotenv
 
 
 @dataclass(frozen=True)
@@ -27,7 +25,6 @@ def _require(name: str) -> str:
 
 
 def get_settings() -> Settings:
-    load_dotenv()  # loads .env if present, no-op otherwise
     db_path = Path(_require("LAC_DB_PATH")).resolve()
     return Settings(
         db_path=db_path,
