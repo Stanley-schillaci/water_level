@@ -236,3 +236,32 @@ def get_last_gpt_response(db_path: Path, kind: str) -> str | None:
             (kind,),
         ).fetchone()
     return row["response"] if row else None
+
+
+# --- Read helpers for KPIs --------------------------------------------------
+
+
+def load_all_measures(db_path: Path) -> list[dict]:
+    """Return all water_level rows sorted by datetime_event ASC, as dicts."""
+    with connect(db_path) as conn:
+        rows = conn.execute(
+            "SELECT date_event, datetime_event, value, unit FROM water_level ORDER BY datetime_event"
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def load_first_measure_per_day(db_path: Path) -> list[dict]:
+    """Return one measure per day (the earliest of each date), as dicts."""
+    query = """
+    SELECT w.date_event, w.value
+    FROM water_level w
+    JOIN (
+        SELECT date_event, MIN(datetime_event) AS min_dt
+        FROM water_level
+        GROUP BY date_event
+    ) sub ON w.date_event = sub.date_event AND w.datetime_event = sub.min_dt
+    ORDER BY w.date_event ASC
+    """
+    with connect(db_path) as conn:
+        rows = conn.execute(query).fetchall()
+    return [dict(r) for r in rows]

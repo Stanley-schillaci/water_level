@@ -13,6 +13,8 @@ from lac_worker.db import (
     get_missing_days,
     init_db,
     list_empty_days,
+    load_all_measures,
+    load_first_measure_per_day,
     log_gpt_call,
     measure_exists,
     upsert_empty_day,
@@ -219,3 +221,35 @@ def test_get_last_gpt_response_returns_none_when_no_match(tmp_db: Path) -> None:
     init_db(tmp_db)
 
     assert get_last_gpt_response(tmp_db, kind="tendance") is None
+
+
+# --- Task 9: read helpers for KPIs ------------------------------------------
+
+
+def test_load_all_measures_returns_dicts_sorted_by_datetime(tmp_db: Path) -> None:
+    init_db(tmp_db)
+    add_measure(tmp_db, "10-09-2024", "14:20", 665.9, "mNGF")
+    add_measure(tmp_db, "10-09-2024", "08:00", 665.8, "mNGF")
+    add_measure(tmp_db, "11-09-2024", "00:00", 665.7, "mNGF")
+
+    result = load_all_measures(tmp_db)
+
+    assert [m["datetime_event"] for m in result] == [
+        "2024-09-10 08:00:00",
+        "2024-09-10 14:20:00",
+        "2024-09-11 00:00:00",
+    ]
+    assert result[0]["value"] == 665.8
+
+
+def test_load_first_measure_per_day_returns_one_row_per_date(tmp_db: Path) -> None:
+    init_db(tmp_db)
+    add_measure(tmp_db, "10-09-2024", "14:20", 665.9, "mNGF")
+    add_measure(tmp_db, "10-09-2024", "08:00", 665.8, "mNGF")
+    add_measure(tmp_db, "11-09-2024", "00:00", 665.7, "mNGF")
+
+    result = load_first_measure_per_day(tmp_db)
+
+    assert len(result) == 2
+    by_date = {r["date_event"]: r["value"] for r in result}
+    assert by_date == {"2024-09-10": 665.8, "2024-09-11": 665.7}
