@@ -92,8 +92,6 @@ export default function OptionsClient({
 
   return (
     <div className="space-y-5">
-      <h1 className="text-2xl font-bold">⚙️ Options</h1>
-
       {/* THÈME */}
       <Section title="Thème">
         <div className="space-y-1">
@@ -200,7 +198,7 @@ export default function OptionsClient({
           </summary>
           <div className="text-xs text-slate-600 dark:text-slate-400 mt-2 leading-relaxed space-y-2">
             <p>
-              <strong>Principe</strong> : on prend le niveau de la dernière mesure connue (le « niveau actuel ») et on le soustrait au niveau d&apos;il y a exactement N×24 h.
+              <strong>Principe</strong>{" "}: on prend le niveau de la dernière mesure connue (le « niveau actuel ») et on le soustrait au niveau d&apos;il y a exactement N×24 h.
             </p>
             <p>
               <strong>Exemple concret</strong> — si la dernière mesure date du <code>16 mai 23:40</code> et vaut <code>666.91 m</code> :
@@ -211,13 +209,13 @@ export default function OptionsClient({
               <li><strong>VS il y a une semaine</strong> compare à la mesure du <code>9 mai 23:40</code></li>
             </ul>
             <p>
-              Comme l&apos;API publie une mesure toutes les 20 minutes, on a en général exactement la mesure de <code>23:40</code> à J-7 (ou à 1 minute près).
+              Comme l&apos;API publie une mesure toutes les 20 minutes, on a en général exactement la mesure de <code>23:40</code>{" "}à J-7 (ou à 1 minute près).
               Si pour une raison ou une autre il n&apos;y a pas de mesure pile à cette heure-là (trou de données ponctuel),
               <strong> on prend la mesure la plus récente strictement avant </strong>
               (donc 23:20, ou à défaut 23:00, etc.).
             </p>
             <p>
-              <strong>Important</strong> : on compare <em>à la même heure</em> que celle de la dernière mesure (23:40 dans l&apos;exemple).
+              <strong>Important</strong>{" "}: on compare <em>à la même heure</em>{" "}que celle de la dernière mesure (23:40 dans l&apos;exemple).
               On ne fait jamais de moyenne sur la journée, et on ne compare jamais à une heure arbitraire (genre « la mesure du début de journée » ou « celle de midi »).
             </p>
           </div>
@@ -256,7 +254,7 @@ export default function OptionsClient({
               <strong>Principe</strong> : on cherche le niveau qu&apos;avait le lac à <em>la même période de l&apos;année</em> il y a 1, 2 ou 3 ans.
             </p>
             <p>
-              <strong>Pourquoi pas exactement la même date ?</strong> Parce qu&apos;une année plus tôt, il n&apos;y a pas forcément de mesure pile au même jour ni à la même heure (panne API, jour blanc, etc.).
+              <strong>Pourquoi pas exactement la même date ?</strong>{" "}Parce qu&apos;une année plus tôt, il n&apos;y a pas forcément de mesure pile au même jour ni à la même heure (panne API, jour blanc, etc.).
               Donc on ouvre une <strong>fenêtre de 7 jours centrée sur l&apos;anniversaire</strong> (3 jours avant + 3 jours après) :
             </p>
             <p>
@@ -287,7 +285,7 @@ export default function OptionsClient({
             <p>
               <strong>Graph « Comparaison annuelle » (page 📈, haut)</strong> :<br />
               Pour chaque année sélectionnée, on prend <strong>une mesure par jour</strong> (la première mesure du jour, généralement vers 00:00-00:40).
-              Toutes les années sont superposées sur un axe X normalisé à une année calendaire (1<sup>er</sup> janv. → 31 déc.), pour voir d&apos;un coup d&apos;œil si le niveau actuel est "en avance" ou "en retard" par rapport aux années précédentes.
+              Toutes les années sont superposées sur un axe X normalisé à une année calendaire (1<sup>er</sup>{" "}janv. → 31 déc.), pour voir d&apos;un coup d&apos;œil si le niveau actuel est "en avance" ou "en retard" par rapport aux années précédentes.
             </p>
             <p>
               <strong>Graph « Historique depuis 2021 » (page 📈, bas)</strong> :<br />
@@ -319,11 +317,11 @@ export default function OptionsClient({
               </li>
             </ol>
             <p>
-              Les deux phrases sont <strong>stockées en base de données</strong> et servies statiquement à chaque visite (pas d&apos;appel à OpenAI à chaque page load).
+              Les deux phrases sont <strong>stockées en base de données</strong>{" "}et servies statiquement à chaque visite (pas d&apos;appel à OpenAI à chaque page load).
               Conséquence : la phrase reste identique toute la journée. Elle se rafraîchit le lendemain matin.
             </p>
             <p>
-              <strong>Pas de phrase IA = phrase trop ancienne ou jamais générée.</strong> Vérifier l&apos;état dans la section "Monitoring" plus haut.
+              <strong>Pas de phrase IA = phrase trop ancienne ou jamais générée.</strong>{" "}Vérifier l&apos;état dans la section "Monitoring" plus haut.
             </p>
           </div>
         </details>
@@ -343,7 +341,7 @@ export default function OptionsClient({
                 <strong>Sur les graphs</strong> : une ligne horizontale pointillée (couleur et style configurables) pour visualiser à quel niveau se trouve le seuil par rapport au niveau actuel.
               </li>
               <li>
-                <strong>Dans le prompt GPT</strong> : nom + description + valeur sont injectés dans le prompt envoyé à GPT-4o chaque matin.
+                <strong>Dans le prompt GPT</strong>{" "}: nom + description + valeur sont injectés dans le prompt envoyé à GPT-4o chaque matin.
                 Plus la description est riche, plus l&apos;IA peut nuancer sa recommandation (« Reculer le bateau, le niveau approche le seuil critique X… »).
               </li>
             </ol>
