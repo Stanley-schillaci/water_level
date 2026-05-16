@@ -70,7 +70,7 @@ Autorité de certification (CA) gratuite. Émet des certificats TLS valides 90 j
 Serveur HTTP devant ton appli, qui forward le trafic. Caddy ici. Avantages : TLS centralisé, multi-domaines facile, compression, logs unifiés.
 
 **Cron timer (systemd)**
-Équivalent moderne de `cron` Unix. Lance une commande à intervalle régulier. `lac-scraper.timer` toutes les 20 min, `lac-ai.timer` chaque jour à 07:00.
+Équivalent moderne de `cron` Unix. Lance une commande à intervalle régulier. `lac-scraper.timer` toutes les 20 min, `lac-ai.timer` toutes les heures à `xx:55` (la policy IA configurée en DB décide à chaque tick s'il génère ou skip).
 
 **Idempotent**
 Une opération qu'on peut exécuter N fois sans changer le résultat par rapport à 1 fois. Ex : `bootstrap.sh` (peut être relancé), `add_measure` (doublon = no-op), `upsert_empty_day` (incrémente le compteur).

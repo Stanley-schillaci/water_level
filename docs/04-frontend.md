@@ -84,14 +84,14 @@ Convention de nommage utilisée : les composants client commencent par `_` (ex: 
 **Server Component** qui :
 1. Appelle `getRecentMeasures(7)` côté serveur
 2. Calcule les KPIs avec `computeKpis()`
-3. Récupère la phrase IA `getLatestAICommentary('tendance')`
-4. Récupère les seuils `getThresholds()`
+3. Récupère la phrase IA + son âge en minutes via `getLatestAICommentaryWithAge('tendance')`
+4. Récupère les seuils `getThresholds()` + la ligne auto `getAutoZeroLine()`
 
 Ordre d'affichage (top to bottom) :
-1. **`<AIBanner>`** — phrase IA générée chaque matin
+1. **`<AIBanner>`** — phrase IA (cadence selon `ai_policy`, par défaut 4×/jour en haute saison, 1×/jour en basse saison) + âge à droite (« il y a X min »)
 2. **`<LevelHero>`** — gros bloc avec le niveau actuel en grand + date de la dernière mesure à droite (date + heure + délai relatif)
 3. **`<KpiGrid>`** — grille 2×2 des deltas (Tendance 7 j, VS hier, VS 3 j, VS sem.)
-4. **`<DaysSelectorWithChart>`** — chips 3/7/30/90/365 j + graph
+4. **`<DaysSelectorWithChart>`** — chips 1/3/7/14/30/60/90/180/365 j + graph (avec ligne auto "Coque touche le fond" + seuils admin)
 
 `DaysSelectorWithChart` est **Client** (interactif) : il garde le N jours en `useState` + `localStorage`, fait `fetch('/api/water/recent?days=N')` quand N change. **Défaut : 3 jours**.
 
@@ -111,10 +111,10 @@ C'est le **même algorithme que la V1 Streamlit** (`webapp/plotly_chart.py::crea
 Cette page contient **deux sections** dans cet ordre :
 
 1. **Comparaison annuelle** — `<AnnualChart>`
-   - Phrase IA "comparaison annuelle" en haut
    - KPIs annuels (VS Y-1, VS Y-2, VS Y-3) calculés avec `computeAnnualKpis()`
    - Multi-select chips des années dispos (défaut : 4 dernières)
    - Graph qui superpose les années sur un axe X normalisé à une année calendaire (les `date_event` sont remplacées par `2000-MM-DD` pour aligner)
+   - L'AIBanner annuel a été supprimé en V2.3 (la phrase doublonnait les KPIs)
 
 2. **Historique complet depuis 2021-07-07** — `<FullHistoryChart>`
    - Une série ECharts par année avec sa propre couleur (palette de 6 couleurs cyclée)
@@ -126,6 +126,7 @@ Cette page contient **deux sections** dans cet ordre :
 Pas de titre de page (juste un lien « Déconnexion » en haut à droite). 4 sections **collapsibles** (`<details>` natifs HTML), seule la première est ouverte par défaut :
 
 1. **📐 Étalonnage du ponton** (V2.3, ouvert par défaut) — gère les 2 calibrations en parallèle (ponton fixe + amovible). 2 cartes en haut affichent la calibration courante de chaque ponton avec un badge « ● actif » sur celui du dernier étalonnage. Formulaire : niveau actuel **en lecture seule** (depuis `/api/water/recent?days=1`) + radio « Ponton fixe / amovible » + profondeur sondeur (éditable) + note optionnelle. Chaque enregistrement insère dans `calibration_history` ET met à jour la calibration courante du ponton concerné dans `display_settings`. Historique des 5 derniers étalonnages en dépliable.
+   - **Bouton « 🚤 Ranger l'amovible (revenir au ponton fixe) »** : apparaît uniquement si `active_ponton === "amovible"` et qu'une calibration fixe existe. Sert quand on range le bateau et que l'amovible n'est plus sur l'eau. Confirmation JS, puis POST `/api/admin/display/archive-amovible` qui insère une entrée `calibration_history` avec `ponton=fixe` + note `"Retour au ponton fixe (rangement amovible)"`, et remet `ponton_amovible_calibration_mngf` à NULL.
 
 2. **⚓ Bateau** (V2.3) — 2 champs : tirant d'eau (m, défaut 0,80) et marge de vigilance (m, défaut 0,30). Les **2 seuils opérationnels** sont dérivés et affichés en read-only (seuil critique = tirant 0,80 m, seuil vigilance = tirant + marge = 1,10 m). Stocké dans `display_settings.boat_draft_m` + `vigilance_margin_m`.
 
@@ -142,7 +143,7 @@ Page client (`_OptionsClient.tsx`) avec 5 sections dans cet ordre :
 
 1. **Affichage du niveau** (V2.2) — 3 radios `Altitude (mNGF) / Sous le ponton / Depuis le minimum historique`. Le mode « Sous le ponton » est grisé si l'admin n'a pas étalonné. Switch immédiat via `useDisplay()`.
 2. **Thème** — radio buttons `Système / Clair / Sombre`, persisté en `localStorage`. Switch immédiat via toggle de la classe `dark` sur `<html>`.
-3. **Comment ça marche ?** — 9 accordions `<details>` qui détaillent les calculs :
+3. **Comment ça marche ?** — accordions `<details>` qui détaillent les calculs :
    - D'où viennent les mesures (Laetis API, 20 min)
    - C'est quoi le mNGF
    - « Sous le ponton » / « Depuis le minimum » : c'est quoi ces référentiels ?
@@ -150,12 +151,11 @@ Page client (`_OptionsClient.tsx`) avec 5 sections dans cet ordre :
    - C'est quoi la Tendance 7 j
    - Comment fonctionne la comparaison annuelle (avec exemple concret, fenêtre ±3 j)
    - Que montrent exactement les graphs (les 3 graphs détaillés)
-   - Les 2 phrases IA (tendance + annuelle, cadence réglable, stockage en DB)
+   - **La phrase IA** (V2.3+ : une seule, "tendance", GPT-5, cadence réglable, stockage en DB ; l'âge est affiché dans le bandeau)
    - À quoi servent les seuils
 4. **Monitoring** — état du backend en live :
-   - Dernière mesure (avec point d'état vert/orange/rouge selon l'âge)
-   - Dernière phrase IA tendance + date relative
-   - Dernière phrase IA annuelle + date relative
+   - Dernière mesure (avec point d'état vert/orange/rouge selon l'âge ; timestamp local Paris)
+   - Dernière phrase IA + âge en minutes calculé en SQL (cf. piège timezone plus bas)
    - Mesures stockées (count)
    - Taille de la DB (MB)
 5. **Panel admin** — bouton vers `/admin` avec note explicative.
@@ -201,10 +201,10 @@ Le niveau du lac est stocké en mNGF (cf [08-glossary.md](08-glossary.md)) mais 
 | `AppShell` | Server | Header sticky "💧 Saints Peyres" + indicateur "Mis à jour il y a N min" + bottom nav |
 | `DisplayProvider` | Client | Wrap layout, fournit `useDisplay()` (mode courant + refs calibration/min). |
 | `BottomNav` | Client | Barre nav iOS-style fixe en bas, **3 émojis seuls** (💧 / 📈 / ⚙️), opacité réduite quand inactif. **Badge rouge ⚠️** sur ⚙️ si `last_run_status='failed'` (poll `/api/ai/status` toutes les 5 min). |
-| `AIBanner` | Server | Carte bleue avec ✨ + phrase IA (ou fallback "Pas de commentaire disponible") |
+| `AIBanner` | Server | Carte bleue avec ✨ + phrase IA + âge à droite (« il y a X min/h/j »). Fallback "Pas de commentaire disponible" si aucune phrase. |
 | `LevelHero` | Server | Bloc d'en-tête de la page Now : gros niveau actuel + date/heure de la dernière mesure (alignés) |
 | `KpiGrid` | Server | Grille 2×2 des deltas (Tendance 7 j, VS hier, VS 3 j, VS sem.) — pas de "niveau actuel" ni "dernier relevé" (ils sont dans `<LevelHero>`) |
-| `DaysSelector` | Client | Chips tactiles `3 j · 7 j · 30 j · 90 j · 365 j` |
+| `DaysSelector` | Client | Chips tactiles `1 j · 3 j · 7 j · 14 j · 30 j · 60 j · 90 j · 180 j · 365 j` (V2.1+) |
 | `YearSelector` | Client | Chips d'années toggleables (multi-select) |
 | `WaterChart` | Client | Wrapper ECharts générique (multi-lines, seuils, dataZoom) — utilisé pour Annuel + Histo |
 | `ColoredCurveChart` (sous `app/`) | Client | Wrapper ECharts spécifique au Now : courbe segmentée colorée par pente locale |
@@ -242,17 +242,50 @@ Spécifique à la page Now, reproduit le comportement Streamlit V1.
 
 Utilisé par `/annuel` (les 2 graphs). Wrapper autour de `echarts-for-react`. Gère :
 
-1. **Lignes multiples** (légende activée si > 1 ligne)
-2. **Gradient sous la courbe** quand il n'y a qu'une seule ligne
-3. **Seuils horizontaux** via `markLine` ECharts sur la 1ère série
-4. **`dataZoom` inside** : pinch-zoom et pan natifs sur mobile
-5. **`touch-action: none`** en CSS pour bloquer le pinch-zoom de la page
+1. **Lignes multiples** — légende activée si > 1 ligne. Positionnée en **haut** du chart (pas en bas) pour ne pas chevaucher l'axe X sur mobile.
+2. **Gradient sous la courbe** quand il n'y a qu'une seule ligne.
+3. **Seuils horizontaux** via `markLine` ECharts sur la 1ère série. **Labels désactivés** (`label.show: false`) depuis V2.3+ : avec 4 lignes sur ~3 m d'écart en mNGF, les noms se chevauchaient sur mobile et restaient illisibles. L'identification se fait depuis `/admin > 📍 Seuils visuels`.
+4. **`dataZoom` inside** : pinch-zoom et pan natifs sur mobile.
+5. **`touch-action: none`** en CSS pour bloquer le pinch-zoom de la page.
 
 **Bug fix important** : `color` est mis à 3 endroits (top-level série + `itemStyle.color` + `lineStyle.color`) pour que le marker du tooltip ait bien la même couleur que la ligne (ECharts utilise `color` au top-level pour le marker, pas `lineStyle.color`).
 
 ---
 
-## Routes API (14 routes)
+## Ligne auto « Coque touche le fond » (V2.3+)
+
+Sur les 3 graphs (page d'accueil + page 📈 × 2), une ligne horizontale est tracée **automatiquement** au niveau de la calibration mNGF du ponton actif. Elle représente le seuil où la coque touche le fond.
+
+- Calculée côté serveur par `getAutoZeroLine()` dans `lib/db.ts` : récupère `getActivePonton()`, lit la calibration correspondante dans `display_settings`, retourne un `ChartThreshold` (trait plein rouge, `width: 2`).
+- Concaténée **en tête** de la liste passée au composant chart (`page.tsx` et `annuel/page.tsx`) pour rester visuellement au-dessus.
+- Distincte des `threshold_line` admin par son style : trait **plein épais rouge** vs. les seuils admin **fins pointillés**.
+- Renvoyée `null` si aucun étalonnage n'a jamais été fait → pas de ligne sur les graphs (état initial).
+
+---
+
+## AIBanner avec âge (V2.3+)
+
+Le bandeau IA en haut de la page d'accueil affiche désormais l'âge de la phrase à droite (« il y a X min », « il y a X h », « il y a X j »).
+
+**Piège timezone** : `gpt_logs.created_at` est stocké en **UTC** (CURRENT_TIMESTAMP SQLite, sans suffixe Z). Si on calcule l'âge côté JS via `new Date("YYYY-MM-DD HH:MM:SS")`, JS interprète le string comme **local time** (Paris CEST = UTC+2 en été) → +2h d'erreur.
+
+**Solution** : on calcule l'âge en **SQL côté serveur** via `strftime('%s','now') - strftime('%s', created_at)` et on passe `ageMinutes` au composant. Cf. `getLatestAICommentaryWithAge()` dans `lib/db.ts` et la query dédiée dans `options/page.tsx` (Monitoring).
+
+À ne pas confondre avec `water_level.datetime_event` qui est stocké en **heure locale Paris** (parsé depuis le HTML Laetis) — pour celui-là `new Date(...)` côté JS interprète comme local et tombe juste par chance.
+
+---
+
+## DisplayProvider — refetch sur navigation (V2.3+)
+
+Le `DisplayProvider` charge les références (calibration ponton, min historique) une fois et les expose via `useDisplay()`. Il est branché au layout racine donc ne se re-mount jamais.
+
+**Sans refetch sur navigation** : après un étalonnage dans `/admin`, l'utilisateur revient sur `/` → les graphs et le `LevelHero` en mode "Sous le ponton" affichaient l'ancienne calibration (bug remonté en prod).
+
+**Fix** : `useEffect(... [pathname])` dans `DisplayProvider.tsx`. À chaque changement de route, un GET `/api/display/settings` recharge les refs. Coût négligeable (1 fetch léger par navigation).
+
+---
+
+## Routes API
 
 Toutes en `export const dynamic = "force-dynamic"` pour empêcher Next.js de tenter de SSG-er du contenu DB-dépendant à build time.
 
@@ -262,9 +295,9 @@ Toutes en `export const dynamic = "force-dynamic"` pour empêcher Next.js de ten
 GET /api/water/recent?days=N        → mesures détaillées (datetime + value) sur N jours
 GET /api/water/yearly?years=2025,…  → 1 mesure/jour par année (la première du jour)
 GET /api/water/full                 → 1 mesure/jour depuis 2021-07-07
-GET /api/ai/commentary?kind=tendance → dernière phrase IA (seul `tendance` est généré depuis V2.3)
+GET /api/ai/commentary              → dernière phrase IA tendance (legacy `?kind` ignoré)
 GET /api/ai/status                  → { last_run_at, last_run_status } — consommé par BottomNav (badge ⚠️)
-GET /api/display/settings           → { ponton_calibration_mngf, min_historical } — consommé par DisplayProvider
+GET /api/display/settings           → { ponton_calibration_mngf, active_ponton, min_historical } — consommé par DisplayProvider
 GET /api/thresholds                 → liste des seuils actifs
 GET /api/health                     → { status, last_measure_age_min, db_size_mb }
 ```
@@ -274,16 +307,21 @@ GET /api/health                     → { status, last_measure_age_min, db_size_
 ### Mutations (admin seulement)
 
 ```
-POST   /api/thresholds              → créer un seuil
-PUT    /api/thresholds/:id          → modifier
-DELETE /api/thresholds/:id          → soft delete
-GET    /api/admin/ai/policy         → lire la policy de cadence IA
-POST   /api/admin/ai/policy         → mettre à jour (validation Zod : mois 1..12, heures 0..23)
-POST   /api/admin/ai/regenerate     → spawn `lac-ai-refresher --force` (rate-limit 1×/5min)
-GET    /api/admin/display/calibration  → lire la calibration ponton
-POST   /api/admin/display/calibration  → écrire (null pour effacer, sinon 600≤mNGF≤700)
-POST   /api/auth/login              → cookie de session signée
-POST   /api/auth/logout             → vide le cookie
+POST   /api/thresholds                          → créer un seuil
+PUT    /api/thresholds/:id                      → modifier
+DELETE /api/thresholds/:id                      → soft delete
+POST   /api/auth/login                          → cookie de session signée
+POST   /api/auth/logout                         → vide le cookie
+
+GET/POST /api/admin/ai/policy                   → cadence IA (mois 1..12, heures 0..23)
+POST   /api/admin/ai/regenerate                 → spawn `lac-ai-refresher --force` (rate-limit 1×/5min)
+GET    /api/admin/ai/history?limit=N            → N dernières entrées gpt_logs (audit)
+GET/POST /api/admin/ai/system-prompt            → lit/écrit le system prompt IA
+GET    /api/admin/ai/system-prompt/history      → snapshots successifs du system prompt
+
+GET/POST /api/admin/display/calibration         → étalonner un ponton (fixe ou amovible)
+POST   /api/admin/display/archive-amovible      → revenir au ponton fixe (rangement V2.3+)
+GET/POST /api/admin/boat                        → tirant d'eau + marge de vigilance
 ```
 
 **Validation des bodies** : Zod (range 600-700m, hex color, etc.).

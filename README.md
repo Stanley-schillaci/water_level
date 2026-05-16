@@ -41,7 +41,7 @@ L'API publique **`data.niv-eau.fr`** (Laetis, opérateur du barrage) publie le n
 │                       │   • threshold_line  │     │
 │   ┌──────────────┐    │   • gpt_logs        │     │
 │   │ ai-refresher │───▶│   • empty_days      │     │
-│   │ cron 07h00   │    └─────────────────────┘     │
+│   │ cron xx:55   │    └─────────────────────┘     │
 │   └──────────────┘                 ▲              │
 │                                    │              │
 │   ┌──────────────────┐   ┌─────────┴─────────┐    │

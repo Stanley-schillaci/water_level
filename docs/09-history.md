@@ -30,7 +30,42 @@ Une seule session de travail (~6h) :
 
 URL principale : `https://gothis.duckdns.org/` (DuckDNS, gratuit, mémorisable). `https://vps-9bc559d8.vps.ovh.net/` reste actif en filet de sécurité. Streamlit Cloud reste up en backup. Cutover définitif prévu à J+30 si tout est stable.
 
-### 2026-05-16 (nuit) — V2.3 : refactor métier complet (pontons + IA)
+### 2026-05-16 (fin journée) — V2.3.1 : polish stabilisation avant remise à papa
+
+Session courte de finitions UX/bug juste avant de livrer l'app à papa. Tout est resté backward compatible côté DB.
+
+**Lisibilité des graphs sur iPhone** :
+- Labels des seuils sur les `markLine` désactivés (`label.show: false`). Avec 4 lignes en ~3 m d'écart (3 admin + auto-zéro), les noms se superposaient et restaient illisibles malgré alternance gauche/droite + fond blanc tentés. L'identification se fait désormais depuis `/admin > 📍 Seuils visuels`.
+- Légende des graphs multi-lignes déplacée en **haut** (`top: 0`) au lieu du bas — elle chevauchait l'axe X (années) sur mobile.
+
+**Ligne « Coque touche le fond » auto sur les 3 graphs** :
+- Calculée côté serveur (`getAutoZeroLine()` dans `lib/db.ts`) depuis la calibration mNGF du ponton actif.
+- Trait plein rouge épais → visuellement distinct des seuils admin (fins pointillés).
+- Aucun affichage tant qu'aucun étalonnage n'a été fait.
+
+**Bouton « 🚤 Ranger l'amovible »** dans `/admin > 📐 Étalonnage du ponton` :
+- Visible uniquement si `active_ponton === "amovible"` ET qu'une calibration fixe existe.
+- POST `/api/admin/display/archive-amovible` → insère une entrée `calibration_history` avec `ponton=fixe` et note `"Retour au ponton fixe (rangement amovible)"`, et remet `ponton_amovible_calibration_mngf` à NULL.
+- Use case : papa range son bateau en fin de session, l'amovible n'est plus dans l'eau, l'app doit retomber sur les seuils du fixe pour les graphs.
+
+**AIBanner — âge à droite** :
+- "il y a X min/h/j" affiché à droite du bandeau pour clarifier la distinction avec l'âge de la dernière mesure (qui était juste en dessous dans `LevelHero` → confusion remontée par papa).
+- Âge calculé en SQL côté serveur, pas JS, à cause du piège timezone (`gpt_logs.created_at` est UTC SQLite, `new Date(str)` JS l'interprète local → +2h).
+
+**Cohérence âge IA Home vs /options Monitoring** :
+- Le `relativeAge(timestamp)` côté JS dans `/options Monitoring` interprétait la string SQLite UTC comme locale → 2h d'écart vs l'AIBanner (déjà fixé).
+- Fix : nouvelle query dans `options/page.tsx` qui calcule `age_minutes` en SQL et passe `lastTendanceAgeMinutes` au composant. Helper `formatMinutesAge()` côté client.
+
+**DisplayProvider refetch sur navigation** :
+- Bug : après un étalonnage, le mode "Sous le ponton" continuait à afficher l'ancienne calibration (le Provider est dans le layout racine, donc useEffect au mount ne se rejoue jamais).
+- Fix : `useEffect(... [pathname])` — refetch `/api/display/settings` à chaque navigation. Aller `/admin → /` suffit pour rafraîchir.
+
+**Côté code propre** :
+- Suppression de tout le code lié à la phrase IA "comparaison_annuelle" côté front (Monitoring `/options`, page.tsx, types).
+- `AiCommentaryKind` type restreint à `"tendance"` (alias prêt à étendre si on en réintroduit un jour).
+- Route `/api/ai/commentary` simplifiée (ignore `?kind` legacy, renvoie toujours tendance).
+
+
 
 Refonte majeure pour aligner l'app sur la **réalité opérationnelle** au lac :
 
@@ -191,9 +226,9 @@ Avant V2.1, changer ça impliquait un redéploiement. Maintenant : 3 clics depui
 
 **Verdict** : approche hybride avec 2 procès isolés sur 1 VPS, partageant 1 SQLite. Best of both worlds.
 
-### Décision : GPT-4o pré-calculé 1×/jour plutôt qu'à chaque visite
+### Décision : LLM pré-calculé périodiquement plutôt qu'à chaque visite
 
-**Choix : phrase IA générée à 07:00, stockée en DB, servie statiquement**
+**Choix (V2.0) : phrase IA générée à 07:00, stockée en DB, servie statiquement.** *Note : depuis V2.1 la cadence est configurable (default 4×/jour en haute saison), et le modèle est passé à GPT-5 en V2.3. La décision sous-jacente — pré-calcul, pas live — reste valide.*
 
 **Pourquoi pas à chaque page load ?**
 - Latence OpenAI (~1-2s) = page Now lente

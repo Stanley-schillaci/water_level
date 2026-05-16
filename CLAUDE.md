@@ -74,6 +74,13 @@ Build sur macOS ne marche pas sur Linux. **Le build doit se faire sur le VPS** (
 ### 6. GPT-5 vs GPT-4o paramètres API
 GPT-5 utilise `max_completion_tokens` au lieu de `max_tokens` et expose `reasoning_effort` (que `gpt-4o` ne supporte pas). Le code (`worker/src/lac_worker/ai.py::call_openai`) conditionne les kwargs selon `MODEL.startswith("gpt-5")`. Si on veut revenir sur 4o, juste changer la constante `MODEL`.
 
+### 7. Timezone : `gpt_logs.created_at` est UTC, `water_level.datetime_event` est local Paris
+- `gpt_logs.created_at` = CURRENT_TIMESTAMP SQLite, donc **UTC sans suffix Z**. `new Date("2026-05-16 14:13:37")` côté JS l'interprète comme local time (Paris CEST = UTC+2) → +2h d'erreur sur le calcul d'âge. **Solution** : calculer l'âge en SQL via `strftime('%s','now') - strftime('%s', created_at)`. Voir `getLatestAICommentaryWithAge()` et la query Monitoring dans `options/page.tsx`.
+- `water_level.datetime_event` est parsé depuis le HTML Laetis, **déjà en heure locale Paris**. Pour celui-là `new Date(str)` JS tombe juste par chance.
+
+### 8. DisplayProvider ne se re-mount jamais
+Le `DisplayProvider` est branché au layout racine ; ses useEffect au mount ne se rejouent jamais lors d'une navigation `<Link>`. Si tu fais évoluer un état serveur consommé par le Provider (calibration, settings…), tu dois soit (a) faire un refetch sur changement de `usePathname()`, soit (b) exposer une fonction `refresh()` via le context que les pages appellent après save. Le pattern actuel utilise (a).
+
 ---
 
 ## Commandes utiles

@@ -183,22 +183,64 @@ CREATE TABLE ai_policy (
 
 **Edit via** : `/admin` (section « 🤖 Phrases IA ») → routes `GET/POST /api/admin/ai/policy`. Le worker tourne en cron horaire (`xx:55`) et appelle `should_generate_now()` à chaque tick (cf [03-worker-python.md](03-worker-python.md)).
 
-### `display_settings` — étalonnage du référentiel d'affichage (V2.2)
+### `display_settings` — étalonnage + bateau + system prompt IA (V2.3)
 
-Singleton (id=1) qui stocke uniquement la calibration ponton. Le minimum historique est calculé à la volée avec `SELECT MIN(value) FROM water_level`, pas besoin de le stocker.
+Singleton (id=1) qui stocke la calibration des 2 pontons, les paramètres bateau (tirant + marge) et le system prompt IA éditable. Le minimum historique reste calculé à la volée par `SELECT MIN(value) FROM water_level`, pas stocké.
 
 ```sql
 CREATE TABLE display_settings (
     id INTEGER PRIMARY KEY CHECK (id = 1),
-    ponton_calibration_mngf REAL,      -- mNGF tel que 0 m = coque du bateau touche l'eau
+    ponton_calibration_mngf REAL,                 -- legacy V2.2, conservé pour rétro-compat
+    ponton_fixe_calibration_mngf REAL,            -- V2.3 : calibration courante ponton fixe
+    ponton_amovible_calibration_mngf REAL,        -- V2.3 : calibration courante ponton amovible (NULL si rangé)
+    boat_draft_m REAL NOT NULL DEFAULT 0.8,       -- V2.3 : tirant d'eau du bateau (m)
+    vigilance_margin_m REAL NOT NULL DEFAULT 0.3, -- V2.3 : marge "ça approche" au-dessus du tirant
+    ai_system_prompt TEXT NOT NULL DEFAULT '',    -- V2.3 : system prompt IA éditable
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 ```
 
-- `ponton_calibration_mngf` est `NULL` tant que l'admin n'a pas étalonné → le mode « Sous le ponton » est grisé dans l'UI.
-- Édit via `/admin` (section « 📐 Étalonnage ») → routes `GET/POST /api/admin/display/calibration` (admin) et `GET /api/display/settings` (public, retourne calibration + min historique pour le DisplayProvider client).
+- **Calibrations** : le **ponton actif** est dérivé du dernier étalonnage dans `calibration_history` (pas stocké ici). Tant qu'aucun étalonnage n'a été fait, les 2 colonnes restent à `NULL` et le mode "Sous le ponton" est grisé.
+- **`boat_draft_m` + `vigilance_margin_m`** : seuils opérationnels dérivés (`critique = tirant`, `vigilance = tirant + marge`). Édit via `/admin > ⚓ Bateau`.
+- **`ai_system_prompt`** : éditable depuis `/admin > 🤖 Phrases IA`. Toute modif est archivée dans `system_prompt_history`. Default seedé à partir de `DEFAULT_AI_SYSTEM_PROMPT` (sync entre `worker/db.py` et `web/src/lib/db.ts`).
 
-**Auto-bootstrap** : la table + la ligne sont créées idempotemment par `web/lib/db.ts::ensureDisplaySettings()`. Le worker Python n'a pas besoin de cette table.
+**Routes** : `GET/POST /api/admin/display/calibration` (étalonner), `POST /api/admin/display/archive-amovible` (revenir au ponton fixe), `GET/POST /api/admin/boat` (bateau), `GET/POST /api/admin/ai/system-prompt` (prompt), `GET /api/display/settings` (public, pour DisplayProvider).
+
+**Auto-bootstrap** : table + ligne créées idempotemment par `web/lib/db.ts::ensureDisplaySettings()` ET côté worker par `_migrate_display_settings_v23()`. Les ALTER TABLE ADD COLUMN sont gardés pour les DBs créées avant V2.3.
+
+### `calibration_history` — historique des étalonnages (V2.3)
+
+Append-only, log des saisies admin. La calibration courante est dérivée du dernier étalonnage par ponton.
+
+```sql
+CREATE TABLE calibration_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lac_level_mngf REAL NOT NULL,       -- niveau du lac au moment de l'étalonnage
+    sonar_depth_m REAL NOT NULL,        -- profondeur lue au sondeur
+    calibration_mngf REAL NOT NULL,     -- = lac_level - sonar_depth (dérivée, stockée pour audit)
+    ponton TEXT NOT NULL CHECK (ponton IN ('fixe', 'amovible')),
+    note TEXT,                          -- note libre (ex : "ponton déplacé de 5m vers la rive")
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+- **`getActivePonton()`** : retourne le `ponton` de la dernière ligne (par `created_at DESC, id DESC`).
+- **Bouton "Ranger l'amovible"** : insère une ligne avec `ponton=fixe`, `calibration_mngf` = celle déjà connue pour le fixe, et note `"Retour au ponton fixe (rangement amovible)"`. Bascule donc l'`active_ponton` sans réel nouveau mesurage.
+- Affiché dans `/admin > 📐 Étalonnage > Historique` (5 dernières lignes).
+
+### `system_prompt_history` — versions successives du system prompt (V2.3)
+
+Append-only, snapshot du `ai_system_prompt` à chaque édition admin.
+
+```sql
+CREATE TABLE system_prompt_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    prompt TEXT NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+Affiché dans `/admin > 🤖 Phrases IA > System prompt > historique des éditions` (depliable, chaque version peut être restaurée).
 
 ---
 

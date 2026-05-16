@@ -219,7 +219,7 @@ water_level/
 │       ├── lac-scraper.service  ← oneshot Python scraping
 │       ├── lac-scraper.timer    ← toutes les 20 min
 │       ├── lac-ai.service       ← oneshot Python IA
-│       ├── lac-ai.timer         ← chaque jour 07:00
+│       ├── lac-ai.timer         ← toutes les heures à xx:55 (la policy DB décide à chaque tick)
 │       ├── lac-backup.service   ← oneshot SQLite backup
 │       └── lac-backup.timer     ← chaque jour 02:05
 │
