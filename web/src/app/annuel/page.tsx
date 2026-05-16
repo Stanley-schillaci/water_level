@@ -1,9 +1,11 @@
 import {
+  getAutoZeroLine,
   getAvailableYears,
   getRecentMeasures,
   getThresholds,
 } from "@/lib/db";
 import { computeAnnualKpis } from "@/lib/kpi";
+import type { ChartThreshold } from "@/components/WaterChart";
 import AnnualChart from "./_AnnualChart";
 import FullHistoryChart from "./_FullHistoryChart";
 
@@ -27,17 +29,23 @@ export default function AnnualPage() {
   const annual = computeAnnualKpis(longMeasures);
   const currentYear = new Date().getFullYear();
   const thresholds = getThresholds();
-  const thresholdsForChart = thresholds.map((t) => ({
-    name: t.name,
-    value: t.value,
-    color: t.color,
-    dashStyle:
-      t.dash_style === "dash" || t.dash_style === "longdash"
-        ? ("dashed" as const)
-        : t.dash_style === "dot"
-          ? ("dotted" as const)
-          : ("solid" as const),
-  }));
+  const autoZero = getAutoZeroLine();
+  // Ligne "zéro ponton" auto en tête de liste pour rester visuellement
+  // au-dessus/dessous des seuils admin (label placé en premier par ECharts).
+  const thresholdsForChart: ChartThreshold[] = [
+    ...(autoZero ? [autoZero] : []),
+    ...thresholds.map((t) => ({
+      name: t.name,
+      value: t.value,
+      color: t.color,
+      dashStyle:
+        t.dash_style === "dash" || t.dash_style === "longdash"
+          ? ("dashed" as const)
+          : t.dash_style === "dot"
+            ? ("dotted" as const)
+            : ("solid" as const),
+    })),
+  ];
 
   return (
     <div className="space-y-8">

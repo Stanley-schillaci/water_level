@@ -12,6 +12,9 @@ export type ChartThreshold = {
   value: number;
   color: string;
   dashStyle?: "solid" | "dashed" | "dotted";
+  // Largeur du trait. Permet de mettre en avant la ligne "zéro ponton" auto
+  // (épaisse + traits pleins) face aux seuils admin (fins + pointillés).
+  width?: number;
 };
 
 type Props = {
@@ -73,7 +76,11 @@ export default function WaterChart({
               lineStyle: { type: "dashed" as const },
               data: thresholds.map((t) => ({
                 yAxis: convertOrSelf(t.value),
-                lineStyle: { color: t.color, type: t.dashStyle ?? "dashed" },
+                lineStyle: {
+                  color: t.color,
+                  type: t.dashStyle ?? "dashed",
+                  width: t.width ?? 1,
+                },
                 label: {
                   formatter: t.name,
                   color: t.color,

@@ -462,6 +462,54 @@ export function addCalibration(p: {
   tx();
 }
 
+/**
+ * Repasse le ponton actif sur "fixe" en archivant l'amovible.
+ * Insère une entrée calibration_history (ponton="fixe", calibration inchangée,
+ * note explicite "rangement amovible") pour que getActivePonton() bascule
+ * naturellement. Met aussi à NULL ponton_amovible_calibration_mngf : l'amovible
+ * n'est plus en service tant qu'on ne l'a pas redéplacé/réétalonné.
+ *
+ * Lève une erreur si :
+ *  - aucune calibration fixe n'a jamais été enregistrée
+ *  - aucune mesure water_level n'est disponible (ne devrait jamais arriver)
+ */
+export function archiveAmovibleToFixe(): { ok: true } {
+  ensureDisplaySettings();
+  ensureCalibrationHistory();
+  const db = getDb();
+  const settings = db
+    .prepare(
+      `SELECT ponton_fixe_calibration_mngf FROM display_settings WHERE id = 1`,
+    )
+    .get() as { ponton_fixe_calibration_mngf: number | null } | undefined;
+  const calibrationFixe = settings?.ponton_fixe_calibration_mngf ?? null;
+  if (calibrationFixe === null) {
+    throw new Error("Aucune calibration ponton fixe enregistrée — impossible d'y revenir");
+  }
+  const last = db
+    .prepare(`SELECT value FROM water_level ORDER BY datetime_event DESC LIMIT 1`)
+    .get() as { value: number } | undefined;
+  if (!last) {
+    throw new Error("Aucune mesure water_level disponible");
+  }
+  const lacLevel = last.value;
+  const sonarDepth = lacLevel - calibrationFixe;
+
+  const insert = db.prepare(
+    `INSERT INTO calibration_history (lac_level_mngf, sonar_depth_m, calibration_mngf, ponton, note)
+     VALUES (?, ?, ?, 'fixe', ?)`,
+  );
+  const updateAmovibleNull = db.prepare(
+    `UPDATE display_settings SET ponton_amovible_calibration_mngf = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = 1`,
+  );
+  const tx = db.transaction(() => {
+    insert.run(lacLevel, sonarDepth, calibrationFixe, "Retour au ponton fixe (rangement amovible)");
+    updateAmovibleNull.run();
+  });
+  tx();
+  return { ok: true };
+}
+
 export function getCalibrationHistory(limit = 20): CalibrationEntry[] {
   ensureCalibrationHistory();
   const db = getDb();
@@ -521,6 +569,52 @@ export function getLevelReferences(): LevelReferences {
     ponton_calibration_mngf,
     active_ponton: active,
     min_historical: min ? { value: min.value, date: min.date_event } : null,
+  };
+}
+
+/**
+ * Ligne horizontale auto-générée à afficher sur TOUS les graphs : représente
+ * le "zéro" (calibration mNGF) du ponton actuellement actif. C'est le niveau
+ * en dessous duquel la coque touche le fond. Distincte des threshold_line
+ * admin par son style (trait plein rouge épais).
+ *
+ * Retourne null si aucun étalonnage n'a jamais été fait, ou si l'étalonnage
+ * du ponton actif est NULL (état impossible théoriquement mais on protège).
+ */
+export type AutoZeroLine = {
+  name: string;
+  value: number;
+  color: string;
+  dashStyle: "solid";
+  width: number;
+};
+
+export function getAutoZeroLine(): AutoZeroLine | null {
+  ensureDisplaySettings();
+  ensureCalibrationHistory();
+  const active = getActivePonton();
+  if (!active) return null;
+  const db = getDb();
+  const row = db
+    .prepare(
+      `SELECT ponton_fixe_calibration_mngf, ponton_amovible_calibration_mngf
+       FROM display_settings WHERE id = 1`,
+    )
+    .get() as {
+    ponton_fixe_calibration_mngf: number | null;
+    ponton_amovible_calibration_mngf: number | null;
+  } | undefined;
+  const calibration =
+    active === "fixe"
+      ? row?.ponton_fixe_calibration_mngf ?? null
+      : row?.ponton_amovible_calibration_mngf ?? null;
+  if (calibration === null) return null;
+  return {
+    name: `Coque touche le fond (ponton ${active})`,
+    value: calibration,
+    color: "#dc2626",
+    dashStyle: "solid",
+    width: 2,
   };
 }
 

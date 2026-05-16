@@ -549,7 +549,33 @@ function CalibrationSection() {
     }
   }
 
+  async function archiveAmovible() {
+    if (
+      !confirm(
+        "Ranger l'amovible et revenir au ponton fixe ?\n\nLa calibration amovible courante sera effacée, mais l'événement reste dans l'historique. Tu pourras réétalonner l'amovible plus tard si besoin.",
+      )
+    ) {
+      return;
+    }
+    setSaving(true);
+    setMsg(null);
+    const r = await fetch("/api/admin/display/archive-amovible", { method: "POST" });
+    const d = await r.json();
+    setSaving(false);
+    if (d.ok) {
+      refreshFromApi(d);
+      setMsg("✓ Retour au ponton fixe enregistré");
+      setTimeout(() => setMsg(null), 4000);
+    } else {
+      setMsg(d.error ?? "Erreur lors du rangement");
+    }
+  }
+
   const draft = settings?.boat_draft_m ?? 1.5;
+  const canArchiveAmovible =
+    activePonton === "amovible" &&
+    settings?.ponton_fixe_calibration_mngf !== null &&
+    settings?.ponton_fixe_calibration_mngf !== undefined;
 
   return (
     <section className="space-y-3">
@@ -607,6 +633,18 @@ function CalibrationSection() {
             </div>
           </div>
         </div>
+
+        {canArchiveAmovible && (
+          <button
+            type="button"
+            onClick={archiveAmovible}
+            disabled={saving}
+            className="w-full bg-amber-100 hover:bg-amber-200 dark:bg-amber-900/40 dark:hover:bg-amber-900/60 disabled:opacity-50 text-amber-900 dark:text-amber-200 font-medium py-2 px-4 rounded text-sm border border-amber-300 dark:border-amber-700"
+            title="À utiliser quand tu ranges l'amovible (fin de session, hivernage)"
+          >
+            🚤 Ranger l&apos;amovible (revenir au ponton fixe)
+          </button>
+        )}
 
         {/* Nouveau saisie */}
         <div className="space-y-2 pt-3 border-t border-slate-200 dark:border-slate-800">

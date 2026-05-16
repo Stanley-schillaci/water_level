@@ -148,7 +148,11 @@ export default function ColoredCurveChart({
               lineStyle: { type: "dashed" as const },
               data: thresholds.map((t) => ({
                 yAxis: convertOrSelf(t.value),
-                lineStyle: { color: t.color, type: t.dashStyle ?? "dashed" },
+                lineStyle: {
+                  color: t.color,
+                  type: t.dashStyle ?? "dashed",
+                  width: t.width ?? 1,
+                },
                 label: {
                   formatter: t.name,
                   color: t.color,
