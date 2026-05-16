@@ -13,10 +13,14 @@ type Measure = { datetime_event: string; value: number };
  * - Grande fenêtre = segments épais (= performance + lisibilité)
  */
 function segmentHoursFor(days: number): number {
+  if (days <= 1) return 1;     // 1j → 24 segments horaires
   if (days <= 3) return 1;     // segments horaires sur 3j → ~72 segments
   if (days <= 7) return 2;     // ~84
+  if (days <= 14) return 3;    // ~112
   if (days <= 30) return 6;    // ~120
+  if (days <= 60) return 8;    // ~180
   if (days <= 90) return 12;   // ~180
+  if (days <= 180) return 18;  // ~240
   return 24;                   // 1 segment/jour pour 1 an
 }
 
@@ -26,10 +30,15 @@ function segmentHoursFor(days: number): number {
  * grande fenêtre = on lisse pour ne pas tout colorer en rouge vif.
  */
 function slopeThresholdFor(days: number): number {
+  if (days <= 1) return 0.04;
   if (days <= 3) return 0.03;
   if (days <= 7) return 0.025;
+  if (days <= 14) return 0.02;
   if (days <= 30) return 0.015;
-  return 0.01;
+  if (days <= 60) return 0.012;
+  if (days <= 90) return 0.01;
+  if (days <= 180) return 0.009;
+  return 0.008;
 }
 
 export default function DaysSelectorWithChart({

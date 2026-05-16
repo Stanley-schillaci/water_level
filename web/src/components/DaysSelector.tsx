@@ -1,6 +1,6 @@
 "use client";
 
-const OPTIONS = [3, 7, 30, 90, 365];
+const OPTIONS = [1, 3, 7, 14, 30, 60, 90, 180, 365];
 
 export default function DaysSelector({
   value,

@@ -278,7 +278,7 @@ export default function OptionsClient({
           <div className="text-xs text-slate-600 dark:text-slate-400 mt-2 leading-relaxed space-y-2">
             <p>
               <strong>Graph « Tendance actuelle » (page d&apos;accueil 💧)</strong> :<br />
-              Toutes les mesures de la fenêtre choisie (3 j, 7 j, etc.), agrégées par tranches de temps.
+              Toutes les mesures de la fenêtre choisie (1 j, 3 j, 7 j, 14 j, 30 j, 60 j, 90 j, 180 j ou 365 j), agrégées par tranches de temps.
               Plus la fenêtre est petite, plus les tranches sont fines (1 h pour 3 jours, 24 h pour 1 an).
               <strong>Chaque petit segment a sa propre couleur</strong> selon la pente locale (vert vif = ça monte vite, vert foncé = ça monte doucement, rouge foncé = ça baisse doucement, rouge vif = ça baisse vite).
             </p>

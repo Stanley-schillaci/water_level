@@ -189,11 +189,15 @@ Spécifique à la page Now, reproduit le comportement Streamlit V1.
 
 | Fenêtre | `segmentSizeHours` | `slopeThreshold` (m/h) | Nb de segments |
 |---|---|---|---|
+| 1 jour | 1 h | 0.040 | ~24 |
 | 3 jours | 1 h | 0.030 | ~72 |
 | 7 jours | 2 h | 0.025 | ~84 |
+| 14 jours | 3 h | 0.020 | ~112 |
 | 30 jours | 6 h | 0.015 | ~120 |
+| 60 jours | 8 h | 0.012 | ~180 |
 | 90 jours | 12 h | 0.010 | ~180 |
-| 365 jours | 24 h | 0.010 | ~365 |
+| 180 jours | 18 h | 0.009 | ~240 |
+| 365 jours | 24 h | 0.008 | ~365 |
 
 ---
 
