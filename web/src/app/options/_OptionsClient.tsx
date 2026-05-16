@@ -161,7 +161,7 @@ export default function OptionsClient({
       {/* ADMIN */}
       <Section title="Administration">
         <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
-          Le panel admin sert à gérer les <strong>lignes de seuil</strong> (les valeurs critiques affichées sur les graphs et utilisées par l&apos;IA).
+          Le panel admin sert à gérer les <strong>lignes de seuil</strong>{" "}(les valeurs critiques affichées sur les graphs et utilisées par l&apos;IA).
         </p>
         <Link
           href="/admin"
@@ -238,7 +238,7 @@ export default function OptionsClient({
               Sur un mois ça ferait environ +1.77 m.
             </p>
             <p>
-              <strong>Tendance positive</strong> = le lac monte ; <strong>négative</strong> = il baisse.
+              <strong>Tendance positive</strong>{" "}= le lac monte ; <strong>négative</strong>{" "}= il baisse.
               C&apos;est cette pente locale qui sert aussi à colorer chaque segment du graph d&apos;accueil (vert si ça monte, rouge si ça baisse).
             </p>
           </div>
