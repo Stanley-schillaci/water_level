@@ -74,29 +74,19 @@ export default function WaterChart({
               symbol: "none",
               silent: true,
               lineStyle: { type: "dashed" as const },
-              // Anti-chevauchement des labels : on alterne gauche/droite
-              // selon l'index, et on ajoute un background semi-opaque pour
-              // que le texte reste lisible même quand la courbe passe dessous.
-              // Sur mobile le chart est étroit donc 2 labels à la même
-              // verticale finissent superposés ; alterner double la place.
-              data: thresholds.map((t, idx) => ({
+              // Labels désactivés volontairement : sur mobile, plusieurs
+              // seuils proches en mNGF rendaient les noms illisibles, et
+              // même avec alternance gauche/droite ça restait chargé.
+              // L'identification des seuils se fait depuis /admin (couleur
+              // + nom listés dans la section "📍 Seuils visuels").
+              data: thresholds.map((t) => ({
                 yAxis: convertOrSelf(t.value),
                 lineStyle: {
                   color: t.color,
                   type: t.dashStyle ?? "dashed",
                   width: t.width ?? 1,
                 },
-                label: {
-                  formatter: t.name,
-                  color: t.color,
-                  position: (idx % 2 === 0
-                    ? "insideStartTop"
-                    : "insideEndTop") as "insideStartTop" | "insideEndTop",
-                  fontSize: 9,
-                  padding: [2, 4, 2, 4],
-                  backgroundColor: "rgba(255,255,255,0.85)",
-                  borderRadius: 3,
-                },
+                label: { show: false },
               })),
             }
           : undefined,

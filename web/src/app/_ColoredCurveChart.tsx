@@ -146,24 +146,16 @@ export default function ColoredCurveChart({
               symbol: "none",
               silent: true,
               lineStyle: { type: "dashed" as const },
-              data: thresholds.map((t, idx) => ({
+              // Labels désactivés (cf. WaterChart.tsx). Les noms des seuils
+              // sont consultables depuis /admin > 📍 Seuils visuels.
+              data: thresholds.map((t) => ({
                 yAxis: convertOrSelf(t.value),
                 lineStyle: {
                   color: t.color,
                   type: t.dashStyle ?? "dashed",
                   width: t.width ?? 1,
                 },
-                label: {
-                  formatter: t.name,
-                  color: t.color,
-                  position: (idx % 2 === 0
-                    ? "insideStartTop"
-                    : "insideEndTop") as "insideStartTop" | "insideEndTop",
-                  fontSize: 9,
-                  padding: [2, 4, 2, 4],
-                  backgroundColor: "rgba(255,255,255,0.85)",
-                  borderRadius: 3,
-                },
+                label: { show: false },
               })),
             }
           : undefined,
