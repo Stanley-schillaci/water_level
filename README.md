@@ -2,26 +2,30 @@
 
 Application personnelle de suivi du **niveau d'eau du barrage du lac des Saints Peyres** (Tarn, Occitanie).
 
-> **Pour qui ?** Mon papa, qui a un bateau amarré sur ponton flottant et qui consulte le niveau du lac plusieurs fois par jour depuis son iPhone pour décider s'il faut déplacer le bateau.
+> **Pour qui ?** Mon papa, qui a un bateau amarré au lac et qui consulte plusieurs fois par jour depuis son iPhone pour savoir s'il a encore assez d'eau sous la coque, et quand il faudra basculer du ponton fixe au ponton amovible.
 
 ---
 
 ## 🎯 Concept métier
 
-Le lac des Saints Peyres est un lac de retenue fermé par un barrage. Son niveau varie au gré des saisons, des précipitations et des lâchers d'eau du barrage. Les ponton flottants suivent le niveau, mais un bateau amarré peut se retrouver :
+Le lac des Saints Peyres est un réservoir hydroélectrique fermé par un barrage. Son niveau varie fortement selon la saison : souvent plein en juin / début juillet, vidange progressive à partir de mi-juillet (agriculture, production électrique, sécheresses). Fin août / septembre est la période la plus critique pour la navigation.
 
-- **Trop haut** quand le niveau monte → la coque tape sur la berge ou le ponton fait pression
-- **Trop bas** quand le niveau baisse → la coque touche le fond ou s'échoue
-- **Coupé du ponton** si le ponton se désaccouple
+Papa est en début de lac, côté peu profond. Il dispose de **deux pontons** :
 
-L'API publique **`data.niv-eau.fr`** (Laetis, opérateur du barrage) publie le niveau toutes les 20 minutes. L'app récupère ces données, les stocke, et présente :
+- **Ponton FIXE** : ancré à un bloc béton, articulé en 2 sections de 6 m. Il suit le niveau de l'eau en hauteur uniquement. Quand le lac descend trop, les bidons flottants reposent au sol et le ponton devient inutilisable. C'est le ponton de référence en haute saison.
+- **Ponton AMOVIBLE** : plateforme libre tractée à pied, déplacée progressivement vers le trait d'eau au fil de la baisse du lac. C'est le ponton de "fin de saison" quand le lac est trop bas.
 
-- Le **niveau actuel** + tendance récente
-- Une **phrase IA** quotidienne qui recommande "ne rien faire / reculer un peu / déplacer ailleurs" en se basant sur le niveau et les seuils définis
-- Des **graphiques** sur 3, 7, 30, 90 ou 365 jours
-- Une **comparaison annuelle** (superposition des années)
+Le **passage du fixe à l'amovible** est une décision de papa, pas de l'app. Papa veut juste savoir : combien d'eau il reste sous la coque, et à quel point le risque de toucher le fond s'approche du tirant d'eau du bateau (80 cm).
+
+L'API publique **`data.niv-eau.fr`** (Laetis, opérateur du barrage) publie le niveau du lac toutes les 20 minutes. L'app récupère ces données, les stocke, et présente :
+
+- Le **niveau actuel** dans le référentiel choisi (mNGF / sous la coque / depuis le minimum historique)
+- Des **KPIs** : VS hier, VS 3 jours, VS 1 semaine, tendance 7 jours (avec auto m↔cm)
+- Une **phrase IA** générée plusieurs fois par jour (cadence réglable) qui décrit factuellement la situation et le niveau de risque par rapport au tirant d'eau
+- Des **graphiques** sur 1, 3, 7, 14, 30, 60, 90, 180 ou 365 jours, colorés selon la pente
+- Une **comparaison annuelle** (VS 2024 / 2023 / 2022)
 - L'**historique complet** depuis le 7 juillet 2021 (début de l'API)
-- La **gestion de lignes de seuil** (admin) pour matérialiser sur les graphs les valeurs critiques (ex: "bateau touche le fond à 663m")
+- Un **panel admin** pour : étalonner le ponton avec le sondeur, régler le tirant d'eau, gérer des seuils visuels, éditer le system prompt de l'IA, monitorer toutes les générations IA (prompts envoyés + réponses)
 
 ---
 
@@ -54,7 +58,7 @@ L'API publique **`data.niv-eau.fr`** (Laetis, opérateur du barrage) publie le n
 | Composant | Rôle | Quand |
 |---|---|---|
 | **scraper.py** (Python) | Récupère les mesures Laetis, écrit dans la DB | Cron toutes les 20 min |
-| **ai-refresher.py** (Python) | Génère la phrase IA via GPT-4o, écrit dans la DB | Cron 1× par jour à 07:00 |
+| **ai-refresher.py** (Python) | Génère la phrase IA (GPT-4o, prompt system+user) selon la cadence configurée | Cron toutes les heures (xx:55), la policy décide |
 | **Next.js** (TypeScript) | Sert l'app web (4 pages : 💧 / 📈 / ⚙️ / admin) | Daemon always-on |
 
 L'**isolation des processus** permet : (1) que le scraping ne dépende pas de la consultation web, (2) que la phrase IA soit pré-calculée et donc instantanée à servir, (3) que Next.js n'ait qu'à **lire** la DB.

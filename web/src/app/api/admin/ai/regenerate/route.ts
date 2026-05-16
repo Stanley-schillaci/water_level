@@ -10,9 +10,11 @@ let lastTriggerAt = 0;
 const RATE_LIMIT_MS = 5 * 60 * 1000;
 
 // Le binaire est installé par uv au déploiement (lac-ai-refresher script).
-// En prod : /var/lib/lac/.uv-cache/.../bin/lac-ai-refresher OU /opt/lac/worker/.venv/bin/lac-ai-refresher
-// On laisse uv le résoudre via `uv run --no-sync lac-ai-refresher --force`.
+// On utilise `uv run --no-sync lac-ai-refresher --force` qui résout l'env Python.
+// Chemin absolu vers uv (symlink posé par bootstrap.sh) car le PATH du process
+// Next.js sous systemd est minimal et ne contient pas /home/app/.local/bin.
 const WORKER_DIR = process.env.LAC_WORKER_DIR ?? "/opt/lac/worker";
+const UV_PATH = process.env.LAC_UV_PATH ?? "/usr/local/bin/uv";
 
 export async function POST() {
   const auth = await requireAdmin();
@@ -31,7 +33,7 @@ export async function POST() {
   // Spawn détaché : on ne bloque pas la requête. Le résultat sera visible
   // via /api/ai/status (last_run_status) une fois le sous-process terminé.
   try {
-    const child = spawn("uv", ["run", "--no-sync", "lac-ai-refresher", "--force"], {
+    const child = spawn(UV_PATH, ["run", "--no-sync", "lac-ai-refresher", "--force"], {
       cwd: WORKER_DIR,
       detached: true,
       stdio: "ignore",

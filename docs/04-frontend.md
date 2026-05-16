@@ -123,19 +123,18 @@ Cette page contient **deux sections** dans cet ordre :
 
 ### `/admin` (protégée par mot de passe)
 
-Pas de titre de page (juste un lien « Déconnexion » en haut à droite). 3 sections **collapsibles** (`<details>` natifs HTML), seule la première est ouverte par défaut :
+Pas de titre de page (juste un lien « Déconnexion » en haut à droite). 4 sections **collapsibles** (`<details>` natifs HTML), seule la première est ouverte par défaut :
 
-1. **📐 Étalonnage du ponton** (V2.2, ouvert par défaut) — calibration du référentiel « Sous le ponton ». Affiche le niveau actuel **en lecture seule** (lu depuis `/api/water/recent?days=1`) + un champ éditable « Profondeur sondeur (m) ». Sauvegarde `ponton_calibration_mngf = niveau_actuel − profondeur` dans `display_settings`. Bouton « Effacer » pour repasser en non-calibré (le mode « Sous le ponton » redevient grisé en Options).
+1. **📐 Étalonnage du ponton** (V2.3, ouvert par défaut) — gère les 2 calibrations en parallèle (ponton fixe + amovible). 2 cartes en haut affichent la calibration courante de chaque ponton avec un badge « ● actif » sur celui du dernier étalonnage. Formulaire : niveau actuel **en lecture seule** (depuis `/api/water/recent?days=1`) + radio « Ponton fixe / amovible » + profondeur sondeur (éditable) + note optionnelle. Chaque enregistrement insère dans `calibration_history` ET met à jour la calibration courante du ponton concerné dans `display_settings`. Historique des 5 derniers étalonnages en dépliable.
 
-2. **📍 Seuils** — bloc explicatif "À quoi servent les seuils ?" (2 usages : graphs + prompt GPT) puis CRUD complet des seuils.
+2. **⚓ Bateau** (V2.3) — 2 champs : tirant d'eau (m, défaut 0,80) et marge de vigilance (m, défaut 1,10). Les **2 seuils opérationnels** sont dérivés et affichés en read-only (seuil critique = tirant, seuil vigilance = tirant + marge). Stocké dans `display_settings.boat_draft_m` + `vigilance_margin_m`.
 
-3. **🤖 Phrases IA** (V2.1) — pilotage de la cadence de génération via la table `ai_policy` :
-   - Toggle activé/désactivé (kill switch global).
-   - 12 checkboxes pour les **mois de haute saison** (défaut : mai → août).
-   - 24 checkboxes (× 2 lignes) pour les **heures de génération** : haute saison (par défaut 06h/10h/14h/18h, en bleu) et basse saison (par défaut 07h, en gris).
-   - Bouton **« 🔄 Régénérer maintenant »** (rate-limit 1×/5 min côté serveur, spawn `uv run lac-ai-refresher --force` en sous-process détaché).
-   - Statut de la dernière génération : `✓ ok / ⚠️ erreur / —` + date relative + message d'erreur en rouge si fail.
-   - Toutes les heures sont en **heure de Paris** (le worker convertit UTC↔Paris automatiquement).
+3. **📍 Seuils visuels** — bloc explicatif "À quoi servent les seuils ?" (2 usages : lignes sur les graphs + injection dans le prompt IA) puis CRUD complet de la table `threshold_line`.
+
+4. **🤖 Phrases IA** (V2.1 + V2.3) — pilotage complet :
+   - **Policy** (V2.1) : toggle activé/désactivé, 12 checkboxes mois haute saison, 24 checkboxes heures (haute saison en bleu, basse saison en gris), bouton « 🔄 Régénérer maintenant » (rate-limit 1×/5 min, spawn `lac-ai-refresher --force`), statut dernière génération.
+   - **System prompt** (V2.3) : textarea modifiable + bouton « Restaurer le défaut » + historique des éditions (depliable, chaque version peut être restaurée). Stocké dans `display_settings.ai_system_prompt`, archivé dans `system_prompt_history` à chaque modification.
+   - **📊 Historique des générations** (V2.3) : 20 dernières entrées de `gpt_logs`. Chaque ligne est dépliable et montre **system prompt complet + user prompt complet + réponse + tokens** pour un audit/monitoring total.
 
 ### `/options` — émoji ⚙️
 
