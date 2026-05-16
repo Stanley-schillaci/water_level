@@ -129,7 +129,7 @@ Cette page contient **deux sections** dans cet ordre :
    - Toggle activé/désactivé (kill switch global).
    - 12 checkboxes pour les **mois de haute saison** (défaut : mai → août).
    - 24 checkboxes (× 2 lignes) pour les **heures de génération** : haute saison (par défaut 06h/10h/14h/18h, en bleu) et basse saison (par défaut 07h, en gris).
-   - Bouton **« 🔄 Régénérer maintenant »** (rate-limit 1×/5 min côté serveur, spawn `uv run lac-ai-refresh --force` en sous-process détaché).
+   - Bouton **« 🔄 Régénérer maintenant »** (rate-limit 1×/5 min côté serveur, spawn `uv run lac-ai-refresher --force` en sous-process détaché).
    - Statut de la dernière génération : `✓ ok / ⚠️ erreur / —` + date relative + message d'erreur en rouge si fail.
    - Toutes les heures sont en **heure de Paris** (le worker convertit UTC↔Paris automatiquement).
 
@@ -237,7 +237,7 @@ PUT    /api/thresholds/:id          → modifier
 DELETE /api/thresholds/:id          → soft delete
 GET    /api/admin/ai/policy         → lire la policy de cadence IA
 POST   /api/admin/ai/policy         → mettre à jour (validation Zod : mois 1..12, heures 0..23)
-POST   /api/admin/ai/regenerate     → spawn `lac-ai-refresh --force` (rate-limit 1×/5min)
+POST   /api/admin/ai/regenerate     → spawn `lac-ai-refresher --force` (rate-limit 1×/5min)
 POST   /api/auth/login              → cookie de session signée
 POST   /api/auth/logout             → vide le cookie
 ```

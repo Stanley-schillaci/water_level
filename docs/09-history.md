@@ -34,7 +34,7 @@ URL principale : `https://gothis.duckdns.org/` (DuckDNS, gratuit, mémorisable).
 
 Itération sur la feature IA :
 - Ajout d'une **table `ai_policy`** (singleton) qui pilote la fréquence de génération.
-- Le worker `lac-ai-refresh` passe d'un cron quotidien (`07:00`) à un cron horaire (`xx:55`) qui consulte la policy pour décider à chaque tick.
+- Le worker `lac-ai-refresher` passe d'un cron quotidien (`07:00`) à un cron horaire (`xx:55`) qui consulte la policy pour décider à chaque tick.
 - Nouveau module `worker/policy.py` avec `should_generate_now()` + tests DST été/hiver.
 - Nouvelle section « 🤖 Phrases IA » dans le panel admin (toggle, mois/heures, bouton « Régénérer maintenant »).
 - Badge ⚠️ rouge sur l'onglet ⚙️ du bottom nav si la dernière génération a échoué (poll `/api/ai/status` toutes les 5 min).

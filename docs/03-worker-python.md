@@ -29,7 +29,7 @@ worker/
 | Commande | Module | Quand lancée |
 |---|---|---|
 | `lac-scraper` | `cli:scraper_main` | systemd timer toutes les 20 min |
-| `lac-ai-refresh` | `cli:ai_refresher_main` | systemd timer toutes les heures (xx:55) — la policy décide |
+| `lac-ai-refresher` | `cli:ai_refresher_main` | systemd timer toutes les heures (xx:55) — la policy décide |
 | `lac-migrate` | `cli:migrate_main` | manuel, une seule fois au déploiement |
 
 ---
@@ -287,7 +287,7 @@ def should_generate_now(
 
 ### `--force`
 
-Le flag CLI `lac-ai-refresh --force` bypass la policy entière (utilisé par le bouton « Régénérer maintenant » du panel admin). Le résultat est tout de même écrit dans `last_run_at/status`, donc visible dans le UI.
+Le flag CLI `lac-ai-refresher --force` bypass la policy entière (utilisé par le bouton « Régénérer maintenant » du panel admin). Le résultat est tout de même écrit dans `last_run_at/status`, donc visible dans le UI.
 
 ### Tests
 

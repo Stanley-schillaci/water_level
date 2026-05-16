@@ -192,7 +192,7 @@ WantedBy=timers.target
 ### `lac-ai.service` + `.timer`
 
 Pareil que scraper mais :
-- `ExecStart=lac-ai-refresh` (au lieu de `lac-scraper`)
+- `ExecStart=lac-ai-refresher` (au lieu de `lac-scraper`)
 - `Timer: OnCalendar=*-*-* *:55:00` (toutes les heures à xx:55, heure locale Paris)
 - `RandomizedDelaySec=2min` pour éviter de cogner OpenAI exactement à xx:55
 
@@ -203,7 +203,7 @@ Pareil que scraper mais :
 - Basse saison (reste de l'année) : 1×/jour à 07h
 - Kill switch global (`enabled=0`) pour tout désactiver
 
-**`--force`** : le bouton "Régénérer maintenant" du panel admin spawn `lac-ai-refresh --force` qui bypass la policy. Rate-limité 1×/5 min côté API Next.js.
+**`--force`** : le bouton "Régénérer maintenant" du panel admin spawn `lac-ai-refresher --force` qui bypass la policy. Rate-limité 1×/5 min côté API Next.js.
 
 ### `lac-backup.service` + `.timer`
 
