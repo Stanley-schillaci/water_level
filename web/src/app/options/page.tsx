@@ -6,18 +6,13 @@ export const dynamic = "force-dynamic";
 export default function OptionsPage() {
   const last = getLastMeasure();
   const lastAIRaw = getLatestAICommentary("tendance");
-  const lastAnnualRaw = getLatestAICommentary("comparaison_annuelle");
 
-  // Récupère la date de génération des dernières phrases IA pour le monitoring
+  // Récupère la date de génération de la dernière phrase IA pour le monitoring.
+  // (la "phrase annuelle" a été supprimée en V2.3, plus qu'une seule phrase "tendance")
   const db = getDb();
   const lastAIRow = db
     .prepare(
       `SELECT created_at FROM gpt_logs WHERE type = 'tendance' ORDER BY created_at DESC LIMIT 1`,
-    )
-    .get() as { created_at: string } | undefined;
-  const lastAnnualRow = db
-    .prepare(
-      `SELECT created_at FROM gpt_logs WHERE type = 'comparaison_annuelle' ORDER BY created_at DESC LIMIT 1`,
     )
     .get() as { created_at: string } | undefined;
 
@@ -34,9 +29,7 @@ export default function OptionsPage() {
     <OptionsClient
       lastMeasureAt={last?.datetime_event ?? null}
       lastTendanceAt={lastAIRow?.created_at ?? null}
-      lastAnnualAt={lastAnnualRow?.created_at ?? null}
       hasLastTendance={lastAIRaw !== null}
-      hasLastAnnual={lastAnnualRaw !== null}
       dbSizeMb={dbSizeMb}
       totalMeasures={totalMeasures}
     />

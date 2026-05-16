@@ -70,17 +70,13 @@ function applyTheme(pref: ThemePref) {
 export default function OptionsClient({
   lastMeasureAt,
   lastTendanceAt,
-  lastAnnualAt,
   hasLastTendance,
-  hasLastAnnual,
   dbSizeMb,
   totalMeasures,
 }: {
   lastMeasureAt: string | null;
   lastTendanceAt: string | null;
-  lastAnnualAt: string | null;
   hasLastTendance: boolean;
-  hasLastAnnual: boolean;
   dbSizeMb: number | null;
   totalMeasures: number;
 }) {
@@ -310,7 +306,7 @@ export default function OptionsClient({
 
         <details className="group py-2 border-b border-slate-200 dark:border-slate-800">
           <summary className="cursor-pointer text-sm font-medium flex justify-between items-center">
-            <span>Les phrases IA en haut de page : c&apos;est quoi ?</span>
+            <span>La phrase IA en haut de page : c&apos;est quoi ?</span>
             <span className="text-slate-400 group-open:rotate-90 transition-transform">▶</span>
           </summary>
           <div className="text-xs text-slate-600 dark:text-slate-400 mt-2 leading-relaxed space-y-2">
@@ -322,7 +318,9 @@ export default function OptionsClient({
             </p>
             <p>
               La phrase est <strong>stockée en base</strong>{" "}et servie statiquement à chaque visite (pas d&apos;appel à OpenAI
-              à chaque page load). Conséquence : elle reste identique entre 2 générations.
+              à chaque page load). Conséquence : elle reste identique entre 2 générations. L&apos;âge de la phrase
+              est affiché à droite du bandeau (« il y a X min / X h »), à ne pas confondre avec l&apos;âge de la
+              dernière mesure du lac qui est dans le bloc juste en dessous.
             </p>
             <p>
               <strong>La cadence est réglable depuis le panel admin</strong>{" "}(section « 🤖 Phrases IA »). On définit :
@@ -380,17 +378,10 @@ export default function OptionsClient({
             </span>
           </li>
           <li className="flex items-center justify-between">
-            <span className="text-slate-600 dark:text-slate-400">Dernière phrase IA (tendance)</span>
+            <span className="text-slate-600 dark:text-slate-400">Dernière phrase IA</span>
             <span className="font-medium">
               <StatusDot status={!hasLastTendance ? "missing" : ageStatus(lastTendanceAt, 36 * 60)} />
               <span className="text-slate-500 text-xs">{relativeAge(lastTendanceAt)}</span>
-            </span>
-          </li>
-          <li className="flex items-center justify-between">
-            <span className="text-slate-600 dark:text-slate-400">Dernière phrase IA (annuelle)</span>
-            <span className="font-medium">
-              <StatusDot status={!hasLastAnnual ? "missing" : ageStatus(lastAnnualAt, 36 * 60)} />
-              <span className="text-slate-500 text-xs">{relativeAge(lastAnnualAt)}</span>
             </span>
           </li>
           <li className="flex items-center justify-between">

@@ -3,10 +3,10 @@ import { getLatestAICommentary } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(req: Request) {
-  const url = new URL(req.url);
-  const kindRaw = url.searchParams.get("kind") ?? "tendance";
-  const kind = kindRaw === "comparaison_annuelle" ? "comparaison_annuelle" : "tendance";
-  const text = getLatestAICommentary(kind);
-  return NextResponse.json({ kind, text });
+// V2.3+ : il n'y a plus qu'une seule phrase IA (kind="tendance").
+// Le paramètre ?kind est conservé pour compat avec d'anciens clients PWA
+// cachés ; tout autre valeur (ou absence) renvoie la phrase tendance.
+export async function GET() {
+  const text = getLatestAICommentary("tendance");
+  return NextResponse.json({ kind: "tendance", text });
 }

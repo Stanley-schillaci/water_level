@@ -562,7 +562,12 @@ export function getAiHistory(limit = 20): AiHistoryEntry[] {
     .all(limit) as AiHistoryEntry[];
 }
 
-export function getLatestAICommentary(kind: "tendance" | "comparaison_annuelle"): string | null {
+// V2.3+ : il n'y a plus qu'une seule phrase IA (kind="tendance").
+// Le type `AiCommentaryKind` est conservé sous forme de literal pour rester
+// explicite côté API et faciliter une éventuelle réintroduction d'un 2e type.
+export type AiCommentaryKind = "tendance";
+
+export function getLatestAICommentary(kind: AiCommentaryKind): string | null {
   const db = getDb();
   const row = db
     .prepare(
@@ -580,7 +585,7 @@ export function getLatestAICommentary(kind: "tendance" | "comparaison_annuelle")
  * l'âge côté JS demanderait de forcer la conversion timezone et c'est piégeux.
  */
 export function getLatestAICommentaryWithAge(
-  kind: "tendance" | "comparaison_annuelle",
+  kind: AiCommentaryKind,
 ): { text: string; ageMinutes: number } | null {
   const db = getDb();
   const row = db
