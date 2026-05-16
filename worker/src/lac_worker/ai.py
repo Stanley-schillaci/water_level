@@ -27,8 +27,14 @@ from lac_worker.db import (
 )
 from lac_worker.kpi import compute_kpis
 
-MODEL = "gpt-4o"
-MAX_TOKENS_COMMENTARY = 200
+# GPT-5 (sorti août 2025) — moins cher que gpt-4o sur l'input ($1.25 vs $2.50/M),
+# meilleure adhérence aux instructions, meilleur français. On désactive le
+# "thinking" (reasoning_effort=minimal) car notre tâche est descriptive simple,
+# pas du raisonnement complexe — évite les reasoning tokens facturés en plus.
+MODEL = "gpt-5"
+REASONING_EFFORT = "minimal"  # minimal | low | medium | high (GPT-5 only)
+MAX_TOKENS_COMMENTARY = 400  # un peu plus large que sur gpt-4o car GPT-5 utilise
+                              # quelques tokens de structure même en minimal
 TEMPERATURE = 0.6
 RECENT_MESSAGES_COUNT = 7
 
@@ -146,14 +152,26 @@ def call_openai(
     temperature: float,
 ) -> str:
     """Send system+user to OpenAI, log the call, return the text."""
+    # Paramètres conditionnés selon la famille de modèle.
+    # GPT-5 introduit `reasoning_effort` ; sur le reste (gpt-4o, etc.) ce
+    # paramètre n'existe pas et fait planter l'appel s'il est passé.
+    extra_kwargs: dict = {}
+    if MODEL.startswith("gpt-5"):
+        extra_kwargs["reasoning_effort"] = REASONING_EFFORT
+        # GPT-5 utilise `max_completion_tokens` au lieu de `max_tokens` (pour
+        # compter aussi les reasoning tokens cachés).
+        extra_kwargs["max_completion_tokens"] = max_tokens
+    else:
+        extra_kwargs["max_tokens"] = max_tokens
+        extra_kwargs["temperature"] = temperature
+
     response = client.chat.completions.create(
         model=MODEL,
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ],
-        temperature=temperature,
-        max_tokens=max_tokens,
+        **extra_kwargs,
     )
     content = response.choices[0].message.content.strip()
     usage = response.usage
