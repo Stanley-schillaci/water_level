@@ -1,73 +1,137 @@
-"""LLM calls for the daily commentary + annual comparison sentences."""
+"""LLM calls for the daily commentary sentence (V2.3).
+
+Architecture en system + user prompts :
+- system : statique, éditable par papa dans /admin (stocké en DB).
+- user : construit à chaque tick avec les données temps réel
+  (niveau, calibrations, ponton actif, seuils dérivés, repères personnels
+  threshold_line, et les 7 dernières phrases pour continuité narrative).
+
+La phrase "comparaison annuelle" a été supprimée en V2.3 (doublonnait les
+KPIs VS 2024/2023/2022 sur la page /annuel).
+"""
 
 from __future__ import annotations
 
-from datetime import datetime as _datetime
+from datetime import datetime
 from pathlib import Path
 
 from openai import OpenAI
 
-from lac_worker.db import connect, log_gpt_call
-from lac_worker.kpi import compute_annual_comparison, compute_kpis
+from lac_worker.db import (
+    get_active_ponton,
+    get_display_settings,
+    get_last_calibration,
+    get_recent_ai_messages,
+    get_threshold_lines,
+    log_gpt_call,
+)
+from lac_worker.kpi import compute_kpis
 
 MODEL = "gpt-4o"
-MAX_TOKENS_COMMENTARY = 180
-MAX_TOKENS_ANNUAL = 100
+MAX_TOKENS_COMMENTARY = 200
+TEMPERATURE = 0.6
+RECENT_MESSAGES_COUNT = 7
 
 
-def build_commentary_prompt(kpis: dict, thresholds: list[dict]) -> str:
-    """Build the prompt for the daily 'tendance' sentence."""
-    lines = [
-        "Tu es un assistant expert en hydrologie.",
-        "Tu dois aider un opérateur nautique à décider s'il faut déplacer un bateau : "
-        "ne rien faire, le reculer sur le ponton, ou le déplacer ailleurs.",
-        "Le bateau a un tirant d'eau de 0,4 m. Il est amarré sur un ponton flottant relié à la berge.",
-        "Le lac est fermé par un barrage et son niveau varie naturellement.",
-        "La décision dépend du niveau actuel, de son évolution récente, et des seuils prédéfinis.",
-        "",
-        "<données>",
-        f"Date de la dernière mesure : {kpis['last_datetime']}",
-        f"Niveau actuel : {kpis['level']:.2f} m",
-        f"Variation par rapport à hier : {kpis['vs_j1']:+.3f} m",
-        f"Variation par rapport à il y a 3 jours : {kpis['vs_j3']:+.3f} m",
-        f"Variation par rapport à la semaine dernière : {kpis['vs_s1']:+.3f} m",
-        f"Tendance sur 7 jours : {kpis['trend_7d_m_per_day']:+.3f} m/j",
-        "</données>",
-        "",
-        "<seuils>",
-    ]
-    for t in thresholds:
-        lines.append(f"- {t['name']} ({t['value']:.2f} m) : {t['description']}")
-    lines.append("</seuils>")
+def _format_calibration_age(calibration_created_at: str | None, now: datetime) -> str:
+    """Return a human-readable freshness like 'aujourd'hui', 'il y a 2 jours', etc."""
+    if not calibration_created_at:
+        return "jamais étalonné"
+    try:
+        dt = datetime.strptime(calibration_created_at, "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        return "date inconnue"
+    age = now - dt
+    days = age.days
+    if days <= 0:
+        return "aujourd'hui"
+    if days == 1:
+        return "hier"
+    return f"il y a {days} jours"
+
+
+def build_user_prompt(
+    *,
+    kpis: dict,
+    settings: dict,
+    active_ponton: str | None,
+    last_calibration: dict | None,
+    threshold_lines: list[dict],
+    recent_messages: list[dict],
+    now: datetime,
+) -> str:
+    """Construit le user prompt — toutes les data temps réel formatées."""
+    level = kpis.get("level")
+    boat_draft = settings.get("boat_draft_m", 1.5)
+    vigilance_margin = settings.get("vigilance_margin_m", 0.5)
+
+    # Calibration courante = celle du ponton actif (ou rien si pas d'historique).
+    if active_ponton == "fixe":
+        calibration = settings.get("ponton_fixe_calibration_mngf")
+    elif active_ponton == "amovible":
+        calibration = settings.get("ponton_amovible_calibration_mngf")
+    else:
+        calibration = None
+
+    depth_under_hull = None
+    if level is not None and calibration is not None:
+        depth_under_hull = level - calibration
+
+    lines: list[str] = []
+    lines.append(f"DONNÉES ({now.strftime('%Y-%m-%d %H:%M')})")
+    if level is not None:
+        lines.append(f"- Niveau du lac : {level:.2f} mNGF")
+    else:
+        lines.append("- Niveau du lac : indisponible")
+    if active_ponton:
+        lines.append(f"- Ponton actif : {active_ponton}")
+    else:
+        lines.append("- Ponton actif : inconnu (aucun étalonnage encore enregistré)")
+    if calibration is not None and last_calibration is not None:
+        age = _format_calibration_age(last_calibration.get("created_at"), now)
+        lines.append(
+            f"- Calibration ponton {active_ponton} : {calibration:.2f} mNGF (étalonné {age})",
+        )
+    else:
+        lines.append("- Calibration : non disponible")
+    if depth_under_hull is not None:
+        lines.append(f"- Profondeur sous coque : {depth_under_hull:.2f} m")
+    lines.append(f"- Tirant d'eau du bateau : {boat_draft:.2f} m")
+    lines.append(f"- Marge de vigilance : {vigilance_margin:.2f} m")
     lines.append(
-        "<instruction>Rédige UNE PHRASE en français, claire et concise, qui indique ce que doit "
-        "faire l'opérateur avec le bateau : ne rien faire, le reculer un peu, ou le déplacer "
-        "ailleurs. Tu peux inclure des valeurs utiles (niveau actuel, tendance, seuil atteint). "
-        "Sois factuel, et base ta recommandation sur les données ci-dessus. Mentionne un seuil "
-        "s'il est proche ou franchi.</instruction>"
+        f"- Seuils dérivés : critique = {boat_draft:.2f} m, vigilance = {boat_draft + vigilance_margin:.2f} m",
     )
-    return "\n".join(lines)
+    trend = kpis.get("trend_7d_m_per_day")
+    if trend is not None:
+        sign = "baisse" if trend < 0 else "hausse" if trend > 0 else "stable"
+        lines.append(f"- Tendance 7 jours : {trend:+.3f} m/jour ({sign})")
+    for k_n, label in (("vs_j1", "ΔJ-1"), ("vs_j3", "ΔJ-3"), ("vs_s1", "ΔJ-7")):
+        v = kpis.get(k_n)
+        if v is not None:
+            lines.append(f"- {label} : {v:+.2f} m")
 
+    if threshold_lines:
+        lines.append("")
+        lines.append("REPÈRES PERSONNELS DE PAPA (lignes threshold_line)")
+        for t in threshold_lines:
+            desc = (t.get("description") or "").strip()
+            if desc:
+                lines.append(f"- \"{t['name']}\" ({t['value']:.2f} mNGF) : {desc}")
+            else:
+                lines.append(f"- \"{t['name']}\" ({t['value']:.2f} mNGF)")
 
-def build_annual_prompt(kpis: dict, current_year: int) -> str:
-    """Build the prompt for the annual-comparison sentence."""
-    lines = [
-        "Tu es un assistant expert en hydrologie.",
-        "Génère une phrase courte et factuelle en français.",
-        "Tu compares uniquement le niveau actuel avec celui des 3 dernières années à la même date.",
-        "<données>",
-        f"Niveau actuel : {kpis['level']:.2f} m",
-    ]
-    for n in (1, 2, 3):
-        delta = kpis.get(f"vs_y{n}")
-        if delta is None:
-            continue
-        lines.append(f"VS {current_year - n} : {delta:+.2f} m")
-    lines.append("</données>")
-    lines.append(
-        "<instruction>Génère UNE PHRASE neutre et concise résumant si le niveau actuel est plus "
-        "haut, équivalent ou plus bas que les années précédentes.</instruction>"
-    )
+    if recent_messages:
+        lines.append("")
+        lines.append(
+            f"PHRASES PRÉCÉDENTES (jusqu'à {RECENT_MESSAGES_COUNT}, plus récente en haut)",
+        )
+        for m in recent_messages:
+            ts = m.get("created_at", "")
+            response = m.get("response", "").strip()
+            lines.append(f"- {ts} — {response}")
+
+    lines.append("")
+    lines.append(f"Génère la phrase pour {now.strftime('%Y-%m-%d %H:%M')}.")
     return "\n".join(lines)
 
 
@@ -75,79 +139,73 @@ def call_openai(
     *,
     client: OpenAI,
     db_path: Path,
-    prompt: str,
+    system_prompt: str,
+    user_prompt: str,
     kind: str,
     max_tokens: int,
     temperature: float,
 ) -> str:
-    """Send the prompt to OpenAI, log the call, return the text."""
+    """Send system+user to OpenAI, log the call, return the text."""
     response = client.chat.completions.create(
         model=MODEL,
         messages=[
-            {"role": "system", "content": "Tu es un expert en hydrologie, tu rédiges en français."},
-            {"role": "user", "content": prompt},
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
         ],
         temperature=temperature,
         max_tokens=max_tokens,
     )
     content = response.choices[0].message.content.strip()
     usage = response.usage
+    # On log les 2 prompts (system + user) pour permettre un audit complet
+    # depuis le panel admin (« qu'est-ce qu'on a envoyé à l'IA à 14:55 ? »).
     log_gpt_call(
         db_path,
         model=MODEL,
-        prompt=prompt,
+        prompt=user_prompt,
         response=content,
         prompt_tokens=usage.prompt_tokens,
         completion_tokens=usage.completion_tokens,
         total_tokens=usage.total_tokens,
         kind=kind,
+        system_prompt=system_prompt,
     )
     return content
 
 
-def _load_thresholds(db_path: Path) -> list[dict]:
-    """Return active threshold lines as dicts (sorted by value DESC)."""
-    with connect(db_path) as conn:
-        rows = conn.execute(
-            """
-            SELECT name, description, value FROM threshold_line
-            WHERE is_deleted = 0
-            ORDER BY value DESC
-            """
-        ).fetchall()
-    return [dict(r) for r in rows]
-
-
 def run_ai_refresher(*, client: OpenAI, db_path: Path) -> dict:
-    """Compute KPIs, build both prompts, call OpenAI twice, persist results.
+    """Compute KPIs, build system+user, call OpenAI once, persist.
 
-    Returns {'tendance': str|None, 'comparaison_annuelle': str|None}.
-    Skips both calls if water_level is empty.
+    Returns {'tendance': str|None}. Skips if water_level is empty.
     """
     kpis = compute_kpis(db_path)
     if kpis["level"] is None:
-        return {"tendance": None, "comparaison_annuelle": None}
+        return {"tendance": None}
 
-    thresholds = _load_thresholds(db_path)
-    prompt_t = build_commentary_prompt(kpis, thresholds)
+    settings = get_display_settings(db_path)
+    active_ponton = get_active_ponton(db_path)
+    last_cal = get_last_calibration(db_path)
+    thresholds = get_threshold_lines(db_path)
+    recent = get_recent_ai_messages(db_path, kind="tendance", limit=RECENT_MESSAGES_COUNT)
+
+    system_prompt = settings.get("ai_system_prompt") or ""
+    user_prompt = build_user_prompt(
+        kpis=kpis,
+        settings=settings,
+        active_ponton=active_ponton,
+        last_calibration=last_cal,
+        threshold_lines=thresholds,
+        recent_messages=recent,
+        now=datetime.now(),
+    )
+
     tendance = call_openai(
         client=client,
         db_path=db_path,
-        prompt=prompt_t,
+        system_prompt=system_prompt,
+        user_prompt=user_prompt,
         kind="tendance",
         max_tokens=MAX_TOKENS_COMMENTARY,
-        temperature=0.7,
+        temperature=TEMPERATURE,
     )
-
-    annual_kpis = {"level": kpis["level"], **compute_annual_comparison(db_path)}
-    prompt_a = build_annual_prompt(annual_kpis, current_year=_datetime.now().year)
-    annual = call_openai(
-        client=client,
-        db_path=db_path,
-        prompt=prompt_a,
-        kind="comparaison_annuelle",
-        max_tokens=MAX_TOKENS_ANNUAL,
-        temperature=0.5,
-    )
-
-    return {"tendance": tendance, "comparaison_annuelle": annual}
+    return {"tendance": tendance}

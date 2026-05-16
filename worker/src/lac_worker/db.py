@@ -72,6 +72,41 @@ SCHEMA = [
         updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
     )
     """,
+    # V2.3 : display_settings (singleton) — étalonnage + bateau + AI system prompt.
+    # Cohérent avec web/src/lib/db.ts. Les colonnes V2.3 sont ajoutées via
+    # _migrate_display_settings() pour les DBs existantes.
+    """
+    CREATE TABLE IF NOT EXISTS display_settings (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        ponton_calibration_mngf REAL,                       -- legacy V2.2
+        ponton_fixe_calibration_mngf REAL,
+        ponton_amovible_calibration_mngf REAL,
+        boat_draft_m REAL NOT NULL DEFAULT 0.8,
+        vigilance_margin_m REAL NOT NULL DEFAULT 1.1,
+        ai_system_prompt TEXT NOT NULL DEFAULT '',
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+    """,
+    # V2.3 : historique des étalonnages tagués par ponton.
+    """
+    CREATE TABLE IF NOT EXISTS calibration_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        lac_level_mngf REAL NOT NULL,
+        sonar_depth_m REAL NOT NULL,
+        calibration_mngf REAL NOT NULL,
+        ponton TEXT NOT NULL CHECK (ponton IN ('fixe', 'amovible')),
+        note TEXT,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+    """,
+    # V2.3 : snapshots successifs du system prompt édité par l'admin.
+    """
+    CREATE TABLE IF NOT EXISTS system_prompt_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        prompt TEXT NOT NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+    """,
     "CREATE INDEX IF NOT EXISTS idx_water_level_date_event ON water_level(date_event)",
 ]
 
@@ -81,6 +116,41 @@ _AI_POLICY_SEED = """
 INSERT OR IGNORE INTO ai_policy (id, enabled, high_season_months, high_season_hours, low_season_hours)
 VALUES (1, 1, '5,6,7,8', '6,10,14,18', '7')
 """
+
+# V2.3 : default system prompt — doit rester en sync avec web/src/lib/db.ts.
+DEFAULT_AI_SYSTEM_PROMPT = """Tu es l'assistant nautique du Lac des Saints Peyres (Tarn). Tu rédiges UNE phrase factuelle en français à destination du propriétaire du bateau.
+
+LE LIEU
+Le lac est un réservoir hydroélectrique fermé par un barrage. Son niveau varie fortement selon la saison : souvent plein en juin / début juillet, vidange progressive à partir de mi-juillet (agriculture, production électrique, sécheresses). Fin août / septembre est la période la plus critique pour la navigation. Le propriétaire est en début de lac, côté peu profond ; le terrain autour est plat, donc une baisse modeste éloigne fortement le trait d'eau de la rive.
+
+LE BATEAU & LES PONTONS
+Le bateau a un tirant d'eau de référence (fourni dans le user prompt). Il existe DEUX pontons :
+- PONTON FIXE : ancré à un bloc béton, articulé en 2 sections de 6 m, suit le niveau de l'eau en hauteur uniquement. Quand le lac descend trop, les bidons flottants reposent au sol et le ponton devient inutilisable. La calibration du ponton fixe est STABLE (rarement modifiée).
+- PONTON AMOVIBLE : plateforme libre tractée à pied, déplacée progressivement vers le trait d'eau au fil de la baisse. Sa calibration change à chaque déplacement.
+
+Le user prompt indique quel ponton est actuellement actif (déduit du dernier étalonnage). Le passage de l'un à l'autre est une DÉCISION DU PROPRIÉTAIRE, pas de ton ressort. Tu peux signaler que la profondeur devient critique, jamais ordonner quoi que ce soit.
+
+LES SEUILS OPÉRATIONNELS
+- Tirant d'eau : profondeur minimale absolue pour amarrer sans que la coque ne tape le fond.
+- Marge de vigilance : seuil au-dessus du tirant d'eau qui signale "le risque approche".
+
+CE QUE TU PRODUIS
+Une seule phrase en français, factuelle, qui mentionne :
+- la profondeur actuelle sous la coque (en m ou cm, ce qui parle le mieux),
+- la tendance récente (baisse / hausse / stable),
+- le niveau de risque par rapport au tirant d'eau et à la marge de vigilance,
+- si un seuil personnel (fourni dans le user prompt) est proche, tu peux le citer.
+
+CE QUE TU NE FAIS JAMAIS
+- Pas de prévision en jours ("dans 8 jours il faudra...").
+- Pas de directive géographique ("déplace le ponton de 5 m"). Tu ne connais pas le terrain en détail.
+- Pas d'ordre catégorique. Tu décris, tu n'imposes pas.
+
+CONTINUITÉ NARRATIVE
+Les phrases précédentes (jusqu'à 7) te sont fournies dans le user prompt. Tu peux faire référence à la situation passée ("stable depuis hier", "comme hier"). Si rien n'a changé, dis-le simplement. Ne force PAS une variation artificielle : si la situation est identique, la phrase peut être identique.
+
+TON
+Factuel, direct, posé. Pas d'effusion, pas de drama."""
 
 
 # --- Connection helpers -----------------------------------------------------
@@ -98,6 +168,25 @@ def connect(db_path: Path) -> Iterator[sqlite3.Connection]:
         conn.close()
 
 
+def _migrate_display_settings_v23(conn: sqlite3.Connection) -> None:
+    """ALTER TABLE ADD COLUMN idempotent pour les DBs créées avant V2.3."""
+    cols = {row["name"] for row in conn.execute("PRAGMA table_info(display_settings)")}
+    if "ponton_fixe_calibration_mngf" not in cols:
+        conn.execute("ALTER TABLE display_settings ADD COLUMN ponton_fixe_calibration_mngf REAL")
+        # data migration : si une calibration existait avant V2.3, on l'assume "fixe".
+        conn.execute(
+            "UPDATE display_settings SET ponton_fixe_calibration_mngf = ponton_calibration_mngf WHERE id = 1",
+        )
+    if "ponton_amovible_calibration_mngf" not in cols:
+        conn.execute("ALTER TABLE display_settings ADD COLUMN ponton_amovible_calibration_mngf REAL")
+    if "boat_draft_m" not in cols:
+        conn.execute("ALTER TABLE display_settings ADD COLUMN boat_draft_m REAL NOT NULL DEFAULT 0.8")
+    if "vigilance_margin_m" not in cols:
+        conn.execute("ALTER TABLE display_settings ADD COLUMN vigilance_margin_m REAL NOT NULL DEFAULT 1.1")
+    if "ai_system_prompt" not in cols:
+        conn.execute("ALTER TABLE display_settings ADD COLUMN ai_system_prompt TEXT NOT NULL DEFAULT ''")
+
+
 def init_db(db_path: Path) -> None:
     """Create all tables, indexes, and activate WAL. Idempotent."""
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -106,6 +195,17 @@ def init_db(db_path: Path) -> None:
         for stmt in SCHEMA:
             conn.execute(stmt)
         conn.execute(_AI_POLICY_SEED)
+        _ensure_gpt_logs_system_prompt_column(conn)
+        _migrate_display_settings_v23(conn)
+        # Seed display_settings singleton + system prompt par défaut si vide.
+        conn.execute(
+            "INSERT OR IGNORE INTO display_settings (id, ai_system_prompt) VALUES (1, ?)",
+            (DEFAULT_AI_SYSTEM_PROMPT,),
+        )
+        conn.execute(
+            "UPDATE display_settings SET ai_system_prompt = ? WHERE id = 1 AND (ai_system_prompt IS NULL OR ai_system_prompt = '')",
+            (DEFAULT_AI_SYSTEM_PROMPT,),
+        )
 
 
 # --- water_level operations -------------------------------------------------
@@ -222,6 +322,13 @@ def get_missing_days(
 # --- gpt_logs helpers -------------------------------------------------------
 
 
+def _ensure_gpt_logs_system_prompt_column(conn: sqlite3.Connection) -> None:
+    """Idempotent : ajoute la colonne system_prompt à gpt_logs (V2.3+)."""
+    cols = {row["name"] for row in conn.execute("PRAGMA table_info(gpt_logs)")}
+    if "system_prompt" not in cols:
+        conn.execute("ALTER TABLE gpt_logs ADD COLUMN system_prompt TEXT")
+
+
 def log_gpt_call(
     db_path: Path,
     model: str,
@@ -231,18 +338,21 @@ def log_gpt_call(
     completion_tokens: int,
     total_tokens: int,
     kind: str,
+    system_prompt: str | None = None,
 ) -> None:
-    """Persist an LLM call. `kind` is 'tendance' or 'comparaison_annuelle'."""
+    """Persist an LLM call. `kind` est 'tendance'. `prompt` est le user prompt ;
+    `system_prompt` (V2.3) est le system prompt envoyé en parallèle."""
     with connect(db_path) as conn:
+        _ensure_gpt_logs_system_prompt_column(conn)
         conn.execute(
             """
             INSERT INTO gpt_logs (
                 model, prompt, response,
                 prompt_tokens, completion_tokens, total_tokens,
-                type
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                type, system_prompt
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (model, prompt, response, prompt_tokens, completion_tokens, total_tokens, kind),
+            (model, prompt, response, prompt_tokens, completion_tokens, total_tokens, kind, system_prompt),
         )
 
 
@@ -325,6 +435,69 @@ def mark_ai_run(
             """,
             (status, error),
         )
+
+
+# --- display_settings + calibration_history (V2.3) --------------------------
+
+
+def get_display_settings(db_path: Path) -> dict:
+    """Return the singleton display_settings row as a dict (always exists post-init)."""
+    with connect(db_path) as conn:
+        row = conn.execute(
+            """
+            SELECT ponton_fixe_calibration_mngf, ponton_amovible_calibration_mngf,
+                   boat_draft_m, vigilance_margin_m, ai_system_prompt, updated_at
+            FROM display_settings WHERE id = 1
+            """,
+        ).fetchone()
+    return dict(row)
+
+
+def get_active_ponton(db_path: Path) -> str | None:
+    """Return 'fixe' | 'amovible' | None — ponton du dernier étalonnage."""
+    with connect(db_path) as conn:
+        row = conn.execute(
+            "SELECT ponton FROM calibration_history ORDER BY created_at DESC, id DESC LIMIT 1",
+        ).fetchone()
+    return row["ponton"] if row else None
+
+
+def get_last_calibration(db_path: Path) -> dict | None:
+    """Return the last calibration entry (any ponton), or None if no history."""
+    with connect(db_path) as conn:
+        row = conn.execute(
+            """
+            SELECT id, lac_level_mngf, sonar_depth_m, calibration_mngf, ponton, note, created_at
+            FROM calibration_history
+            ORDER BY created_at DESC, id DESC LIMIT 1
+            """,
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def get_threshold_lines(db_path: Path) -> list[dict]:
+    """Return all active threshold_line rows sorted by value DESC."""
+    with connect(db_path) as conn:
+        rows = conn.execute(
+            "SELECT name, description, value FROM threshold_line WHERE is_deleted = 0 ORDER BY value DESC",
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_recent_ai_messages(db_path: Path, kind: str, limit: int = 7) -> list[dict]:
+    """Return the N most recent AI messages of given kind (newest first)."""
+    with connect(db_path) as conn:
+        rows = conn.execute(
+            """
+            SELECT response, created_at
+            FROM gpt_logs
+            WHERE type = ?
+            ORDER BY created_at DESC, id DESC
+            LIMIT ?
+            """,
+            (kind, limit),
+        ).fetchall()
+    return [dict(r) for r in rows]
 
 
 def load_first_measure_per_day(db_path: Path) -> list[dict]:

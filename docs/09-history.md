@@ -30,6 +30,39 @@ Une seule session de travail (~6h) :
 
 URL principale : `https://gothis.duckdns.org/` (DuckDNS, gratuit, mémorisable). `https://vps-9bc559d8.vps.ovh.net/` reste actif en filet de sécurité. Streamlit Cloud reste up en backup. Cutover définitif prévu à J+30 si tout est stable.
 
+### 2026-05-16 (nuit) — V2.3 : refactor métier complet (pontons + IA)
+
+Refonte majeure pour aligner l'app sur la **réalité opérationnelle** au lac :
+
+**Découverte clé** : il existe 2 pontons, pas 1 ! Un ponton FIXE (ancré au bloc béton, articulé en 2 sections de 6 m, suit le niveau en hauteur uniquement, calibration stable) et un ponton AMOVIBLE (tracté à pied, recalibré à chaque déplacement quand le lac est très bas). L'app V2.2 ignorait cette dualité.
+
+**Conséquences modèle** :
+- `display_settings` stocke désormais **2 calibrations en parallèle** (`ponton_fixe_calibration_mngf` + `ponton_amovible_calibration_mngf`).
+- Le **ponton actif** est déduit du dernier étalonnage enregistré dans la nouvelle table `calibration_history` (tag `ponton: fixe | amovible`).
+- L'étalonnage devient une opération de routine (à chaque fin de session pour l'amovible, rare pour le fixe).
+- Le bateau a un tirant d'eau réel de **80 cm** (et non 1,5 m comme assumé en V2.2). Marge de vigilance à 1,10 m.
+
+**Refactor IA** :
+- Suppression complète de la phrase "comparaison annuelle" (doublonnait les KPIs VS 2024/2023).
+- Le prompt passe d'un seul user prompt monolithique à une architecture **system + user** :
+  - `system_prompt` : éditable par papa dans `/admin` (textarea). Stocké dans `display_settings.ai_system_prompt`. Historique des éditions dans `system_prompt_history`.
+  - `user_prompt` : construit à chaque tick avec niveau, calibration courante, ponton actif, seuils dérivés (tirant + marge), repères personnels (`threshold_line`), et **les 7 dernières phrases IA** pour continuité narrative.
+- `gpt_logs` gagne une colonne `system_prompt` pour audit complet.
+- Nouvelle section UI "📊 Historique IA" dans `/admin` qui affiche pour chaque génération : timestamp, system prompt complet, user prompt complet, réponse, tokens.
+
+**Refactor seuils** :
+- Les 3 entrées de `threshold_line` ont été reformulées avec un vocabulaire cohérent (ponton fixe / amovible, sections, bidons posés/flottants).
+- Les seuils visuels et les seuils opérationnels (tirant + marge) sont **2 systèmes distincts** : threshold_line pour les lignes graphiques + repères dans le prompt, tirant/marge pour la décision de risque.
+
+**UI** :
+- `/admin` : ajout de 2 nouvelles sections collapsibles ("⚓ Bateau" pour tirant + marge, et la section IA enrichie avec textarea system prompt + historique). Nouvel ordre : Étalonnage → Bateau → Seuils visuels → Phrases IA.
+- `/annuel` : retrait de l'AIBanner annuel (devenu obsolète).
+
+**Tradeoffs assumés** :
+- Le passage fixe→amovible reste une **décision humaine** (papa). L'IA décrit le risque, n'ordonne pas.
+- Pas de prévision en jours, pas de directive géographique : l'IA n'a pas le terrain en mémoire.
+- Le default prompt est un premier jet "intelligent" — papa l'éditera depuis l'app à chaque fois qu'il voudra ajuster le ton.
+
 ### 2026-05-16 (soir) — V2.2 : référentiels d'affichage relatifs
 
 La donnée brute publiée par Laetis est en mNGF (altitude par rapport au niveau de la mer), donc 666,97 m ne dit pas grand chose à un humain : la région du Tarn est elle-même à ~600 m d'altitude, le lac n'est pas profond de 666 m. Pour rendre la donnée actionnable au quotidien, ajout de **3 référentiels d'affichage interchangeables** :

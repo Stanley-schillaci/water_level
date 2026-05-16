@@ -108,19 +108,21 @@ CREATE TABLE threshold_line (
 CREATE TABLE gpt_logs (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
     model               TEXT,           -- 'gpt-4o'
-    prompt              TEXT,           -- le prompt complet envoyé
+    prompt              TEXT,           -- le user prompt envoyé (V2.3+)
     response            TEXT,           -- la phrase générée
     prompt_tokens       INTEGER,
     completion_tokens   INTEGER,
     total_tokens        INTEGER,
     created_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    type                TEXT NOT NULL DEFAULT 'tendance'
+    type                TEXT NOT NULL DEFAULT 'tendance',
+    system_prompt       TEXT            -- V2.3 : ajouté pour monitoring complet
 );
 ```
 
 - **Sert aussi de source de vérité pour le front** : `GET /api/ai/commentary?kind=tendance` renvoie la dernière ligne `type='tendance'`
-- **Audit** : on peut compter les tokens consommés sur 30 jours pour estimer les coûts OpenAI
-- 1× / jour = 365 lignes/an, pas de souci de volume
+- **Audit/monitoring** : depuis V2.3, on log AUSSI le system_prompt (qui peut être édité par papa). La section "📊 Historique IA" dans `/admin` permet de voir exactement system+user+response pour chaque génération.
+- **Audit coût** : on peut compter les tokens consommés sur 30 jours pour estimer les coûts OpenAI
+- Volume : ~4 lignes/jour en haute saison, 1/jour hors saison → ~750 lignes/an
 
 ### `empty_days` — auto-détection des jours sans donnée API (V2 nouveauté)
 

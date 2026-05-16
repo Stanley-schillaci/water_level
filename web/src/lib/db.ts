@@ -243,15 +243,65 @@ export function getAiStatus(): { last_run_at: string | null; last_run_status: "o
   };
 }
 
-// --- Display settings -------------------------------------------------------
+// --- Display settings (V2.3) ------------------------------------------------
 //
-// Singleton (id=1) qui stocke l'étalonnage du référentiel "Sous le ponton".
-// Auto-bootstrap idempotent.
+// Singleton (id=1) qui stocke :
+//   - les 2 calibrations en parallèle (ponton fixe + ponton amovible)
+//   - les paramètres bateau (tirant d'eau + marge vigilance)
+//   - le system prompt IA éditable
+//   - (legacy) ponton_calibration_mngf : alias rétro-compat pendant la migration
+//
+// On garde la table existante et on ajoute les colonnes avec ALTER TABLE
+// idempotent. Auto-bootstrap idempotent comme tout le reste.
+
+export const DEFAULT_AI_SYSTEM_PROMPT = `Tu es l'assistant nautique du Lac des Saints Peyres (Tarn). Tu rédiges UNE phrase factuelle en français à destination du propriétaire du bateau.
+
+LE LIEU
+Le lac est un réservoir hydroélectrique fermé par un barrage. Son niveau varie fortement selon la saison : souvent plein en juin / début juillet, vidange progressive à partir de mi-juillet (agriculture, production électrique, sécheresses). Fin août / septembre est la période la plus critique pour la navigation. Le propriétaire est en début de lac, côté peu profond ; le terrain autour est plat, donc une baisse modeste éloigne fortement le trait d'eau de la rive.
+
+LE BATEAU & LES PONTONS
+Le bateau a un tirant d'eau de référence (fourni dans le user prompt). Il existe DEUX pontons :
+- PONTON FIXE : ancré à un bloc béton, articulé en 2 sections de 6 m, suit le niveau de l'eau en hauteur uniquement. Quand le lac descend trop, les bidons flottants reposent au sol et le ponton devient inutilisable. La calibration du ponton fixe est STABLE (rarement modifiée).
+- PONTON AMOVIBLE : plateforme libre tractée à pied, déplacée progressivement vers le trait d'eau au fil de la baisse. Sa calibration change à chaque déplacement.
+
+Le user prompt indique quel ponton est actuellement actif (déduit du dernier étalonnage). Le passage de l'un à l'autre est une DÉCISION DU PROPRIÉTAIRE, pas de ton ressort. Tu peux signaler que la profondeur devient critique, jamais ordonner quoi que ce soit.
+
+LES SEUILS OPÉRATIONNELS
+- Tirant d'eau : profondeur minimale absolue pour amarrer sans que la coque ne tape le fond.
+- Marge de vigilance : seuil au-dessus du tirant d'eau qui signale "le risque approche".
+
+CE QUE TU PRODUIS
+Une seule phrase en français, factuelle, qui mentionne :
+- la profondeur actuelle sous la coque (en m ou cm, ce qui parle le mieux),
+- la tendance récente (baisse / hausse / stable),
+- le niveau de risque par rapport au tirant d'eau et à la marge de vigilance,
+- si un seuil personnel (fourni dans le user prompt) est proche, tu peux le citer.
+
+CE QUE TU NE FAIS JAMAIS
+- Pas de prévision en jours ("dans 8 jours il faudra...").
+- Pas de directive géographique ("déplace le ponton de 5 m"). Tu ne connais pas le terrain en détail.
+- Pas d'ordre catégorique. Tu décris, tu n'imposes pas.
+
+CONTINUITÉ NARRATIVE
+Les phrases précédentes (jusqu'à 7) te sont fournies dans le user prompt. Tu peux faire référence à la situation passée ("stable depuis hier", "comme hier"). Si rien n'a changé, dis-le simplement. Ne force PAS une variation artificielle : si la situation est identique, la phrase peut être identique.
+
+TON
+Factuel, direct, posé. Pas d'effusion, pas de drama.`;
 
 export type DisplaySettings = {
-  ponton_calibration_mngf: number | null;
+  ponton_fixe_calibration_mngf: number | null;
+  ponton_amovible_calibration_mngf: number | null;
+  boat_draft_m: number;
+  vigilance_margin_m: number;
+  ai_system_prompt: string;
   updated_at: string;
 };
+
+function tableHasColumn(table: string, column: string): boolean {
+  const db = getDb();
+  const rows = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+  return rows.some((r) => r.name === column);
+}
 
 function ensureDisplaySettings(): void {
   const db = getDb();
@@ -262,10 +312,57 @@ function ensureDisplaySettings(): void {
       updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
     )
   `);
+  // Migrations idempotentes pour les anciennes DBs (V2.2 → V2.3).
+  // ALTER TABLE ADD COLUMN ne supporte pas IF NOT EXISTS en SQLite ; on guard.
+  if (!tableHasColumn("display_settings", "ponton_fixe_calibration_mngf")) {
+    db.exec(`ALTER TABLE display_settings ADD COLUMN ponton_fixe_calibration_mngf REAL`);
+    // Migration data : si une calibration existait avant V2.3, on l'assume "fixe".
+    db.exec(`UPDATE display_settings SET ponton_fixe_calibration_mngf = ponton_calibration_mngf WHERE id = 1`);
+  }
+  if (!tableHasColumn("display_settings", "ponton_amovible_calibration_mngf")) {
+    db.exec(`ALTER TABLE display_settings ADD COLUMN ponton_amovible_calibration_mngf REAL`);
+  }
+  if (!tableHasColumn("display_settings", "boat_draft_m")) {
+    db.exec(`ALTER TABLE display_settings ADD COLUMN boat_draft_m REAL NOT NULL DEFAULT 0.8`);
+  }
+  if (!tableHasColumn("display_settings", "vigilance_margin_m")) {
+    db.exec(`ALTER TABLE display_settings ADD COLUMN vigilance_margin_m REAL NOT NULL DEFAULT 1.1`);
+  }
+  if (!tableHasColumn("display_settings", "ai_system_prompt")) {
+    db.exec(`ALTER TABLE display_settings ADD COLUMN ai_system_prompt TEXT NOT NULL DEFAULT ''`);
+    db.prepare(`UPDATE display_settings SET ai_system_prompt = ? WHERE id = 1 AND ai_system_prompt = ''`).run(
+      DEFAULT_AI_SYSTEM_PROMPT,
+    );
+  }
   db.prepare(
-    `INSERT OR IGNORE INTO display_settings (id, ponton_calibration_mngf)
-     VALUES (1, NULL)`
-  ).run();
+    `INSERT OR IGNORE INTO display_settings (id, ai_system_prompt) VALUES (1, ?)`,
+  ).run(DEFAULT_AI_SYSTEM_PROMPT);
+}
+
+function ensureCalibrationHistory(): void {
+  const db = getDb();
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS calibration_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      lac_level_mngf REAL NOT NULL,
+      sonar_depth_m REAL NOT NULL,
+      calibration_mngf REAL NOT NULL,
+      ponton TEXT NOT NULL CHECK (ponton IN ('fixe', 'amovible')),
+      note TEXT,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+}
+
+function ensureSystemPromptHistory(): void {
+  const db = getDb();
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS system_prompt_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      prompt TEXT NOT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
 }
 
 export function getDisplaySettings(): DisplaySettings {
@@ -273,44 +370,192 @@ export function getDisplaySettings(): DisplaySettings {
   const db = getDb();
   const row = db
     .prepare(
-      `SELECT ponton_calibration_mngf, updated_at FROM display_settings WHERE id = 1`
+      `SELECT ponton_fixe_calibration_mngf, ponton_amovible_calibration_mngf,
+              boat_draft_m, vigilance_margin_m, ai_system_prompt, updated_at
+       FROM display_settings WHERE id = 1`,
     )
-    .get() as { ponton_calibration_mngf: number | null; updated_at: string };
+    .get() as DisplaySettings;
   return row;
 }
 
-export function savePontonCalibration(value_mngf: number | null): void {
+export function saveBoatSettings(p: { boat_draft_m: number; vigilance_margin_m: number }): void {
   ensureDisplaySettings();
   const db = getDb();
   db.prepare(
     `UPDATE display_settings
-     SET ponton_calibration_mngf = ?, updated_at = CURRENT_TIMESTAMP
-     WHERE id = 1`
-  ).run(value_mngf);
+     SET boat_draft_m = @boat_draft_m,
+         vigilance_margin_m = @vigilance_margin_m,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = 1`,
+  ).run(p);
+}
+
+export function saveAiSystemPrompt(prompt: string): void {
+  ensureDisplaySettings();
+  ensureSystemPromptHistory();
+  const db = getDb();
+  // Insert dans l'historique d'abord (snapshot de la version précédente).
+  const current = db
+    .prepare(`SELECT ai_system_prompt FROM display_settings WHERE id = 1`)
+    .get() as { ai_system_prompt: string };
+  if (current.ai_system_prompt !== prompt) {
+    db.prepare(`INSERT INTO system_prompt_history (prompt) VALUES (?)`).run(current.ai_system_prompt);
+  }
+  db.prepare(
+    `UPDATE display_settings
+     SET ai_system_prompt = ?, updated_at = CURRENT_TIMESTAMP
+     WHERE id = 1`,
+  ).run(prompt);
+}
+
+export function getSystemPromptHistory(limit = 20): Array<{ id: number; prompt: string; created_at: string }> {
+  ensureSystemPromptHistory();
+  const db = getDb();
+  return db
+    .prepare(
+      `SELECT id, prompt, created_at FROM system_prompt_history
+       ORDER BY created_at DESC, id DESC LIMIT ?`,
+    )
+    .all(limit) as Array<{ id: number; prompt: string; created_at: string }>;
+}
+
+export type CalibrationEntry = {
+  id: number;
+  lac_level_mngf: number;
+  sonar_depth_m: number;
+  calibration_mngf: number;
+  ponton: "fixe" | "amovible";
+  note: string | null;
+  created_at: string;
+};
+
+export function addCalibration(p: {
+  lac_level_mngf: number;
+  sonar_depth_m: number;
+  ponton: "fixe" | "amovible";
+  note: string | null;
+}): void {
+  ensureDisplaySettings();
+  ensureCalibrationHistory();
+  const calibration_mngf = p.lac_level_mngf - p.sonar_depth_m;
+  const db = getDb();
+  const insert = db.prepare(
+    `INSERT INTO calibration_history (lac_level_mngf, sonar_depth_m, calibration_mngf, ponton, note)
+     VALUES (@lac_level_mngf, @sonar_depth_m, @calibration_mngf, @ponton, @note)`,
+  );
+  // Met aussi à jour la calibration courante du ponton concerné.
+  const updateFixe = db.prepare(
+    `UPDATE display_settings SET ponton_fixe_calibration_mngf = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 1`,
+  );
+  const updateAmovible = db.prepare(
+    `UPDATE display_settings SET ponton_amovible_calibration_mngf = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 1`,
+  );
+  const tx = db.transaction(() => {
+    insert.run({ ...p, calibration_mngf });
+    if (p.ponton === "fixe") updateFixe.run(calibration_mngf);
+    else updateAmovible.run(calibration_mngf);
+  });
+  tx();
+}
+
+export function getCalibrationHistory(limit = 20): CalibrationEntry[] {
+  ensureCalibrationHistory();
+  const db = getDb();
+  return db
+    .prepare(
+      `SELECT id, lac_level_mngf, sonar_depth_m, calibration_mngf, ponton, note, created_at
+       FROM calibration_history
+       ORDER BY created_at DESC, id DESC LIMIT ?`,
+    )
+    .all(limit) as CalibrationEntry[];
+}
+
+/**
+ * Détermine quel ponton est actif (= ponton du dernier étalonnage).
+ * Retourne null si aucun étalonnage n'a jamais été fait.
+ */
+export function getActivePonton(): "fixe" | "amovible" | null {
+  ensureCalibrationHistory();
+  const db = getDb();
+  const row = db
+    .prepare(`SELECT ponton FROM calibration_history ORDER BY created_at DESC, id DESC LIMIT 1`)
+    .get() as { ponton: "fixe" | "amovible" } | undefined;
+  return row?.ponton ?? null;
 }
 
 export type LevelReferences = {
-  ponton_calibration_mngf: number | null;
+  ponton_calibration_mngf: number | null;     // calibration courante du ponton actif
+  active_ponton: "fixe" | "amovible" | null;
   min_historical: { value: number; date: string } | null;
 };
 
 export function getLevelReferences(): LevelReferences {
   // Endpoint public consommé par le DisplayContext côté client.
   ensureDisplaySettings();
+  ensureCalibrationHistory();
   const db = getDb();
   const settings = db
-    .prepare(`SELECT ponton_calibration_mngf FROM display_settings WHERE id = 1`)
-    .get() as { ponton_calibration_mngf: number | null };
-  const min = db
     .prepare(
-      `SELECT value, date_event FROM water_level
-       ORDER BY value ASC LIMIT 1`
+      `SELECT ponton_fixe_calibration_mngf, ponton_amovible_calibration_mngf
+       FROM display_settings WHERE id = 1`,
     )
+    .get() as {
+    ponton_fixe_calibration_mngf: number | null;
+    ponton_amovible_calibration_mngf: number | null;
+  };
+  const active = getActivePonton();
+  const ponton_calibration_mngf =
+    active === "fixe"
+      ? settings?.ponton_fixe_calibration_mngf ?? null
+      : active === "amovible"
+        ? settings?.ponton_amovible_calibration_mngf ?? null
+        : null;
+  const min = db
+    .prepare(`SELECT value, date_event FROM water_level ORDER BY value ASC LIMIT 1`)
     .get() as { value: number; date_event: string } | undefined;
   return {
-    ponton_calibration_mngf: settings?.ponton_calibration_mngf ?? null,
+    ponton_calibration_mngf,
+    active_ponton: active,
     min_historical: min ? { value: min.value, date: min.date_event } : null,
   };
+}
+
+// --- AI history (V2.3) ------------------------------------------------------
+//
+// Monitoring complet des générations : on retourne system+user+response+tokens
+// pour permettre à l'admin de voir exactement ce qui a été envoyé à GPT.
+
+export type AiHistoryEntry = {
+  id: number;
+  created_at: string;
+  type: string;
+  model: string | null;
+  system_prompt: string | null;
+  prompt: string;          // user prompt
+  response: string;
+  total_tokens: number | null;
+};
+
+function ensureGptLogsSystemPromptColumn(): void {
+  // Idempotent : la colonne `system_prompt` a été ajoutée en V2.3.
+  const db = getDb();
+  const cols = db.prepare(`PRAGMA table_info(gpt_logs)`).all() as Array<{ name: string }>;
+  if (!cols.some((c) => c.name === "system_prompt")) {
+    db.exec(`ALTER TABLE gpt_logs ADD COLUMN system_prompt TEXT`);
+  }
+}
+
+export function getAiHistory(limit = 20): AiHistoryEntry[] {
+  ensureGptLogsSystemPromptColumn();
+  const db = getDb();
+  return db
+    .prepare(
+      `SELECT id, created_at, type, model, system_prompt, prompt, response, total_tokens
+       FROM gpt_logs
+       ORDER BY created_at DESC, id DESC
+       LIMIT ?`,
+    )
+    .all(limit) as AiHistoryEntry[];
 }
 
 export function getLatestAICommentary(kind: "tendance" | "comparaison_annuelle"): string | null {

@@ -137,12 +137,18 @@ export default function AdminClient({
         <CalibrationSection />
       </Collapsible>
 
-      <Collapsible title="📍 Seuils">
+      <Collapsible title="⚓ Bateau">
+        <BoatSection />
+      </Collapsible>
+
+      <Collapsible title="📍 Seuils visuels">
         <ThresholdsSection thresholds={thresholds} onChanged={refresh} />
       </Collapsible>
 
       <Collapsible title="🤖 Phrases IA">
         <AiPolicySection />
+        <SystemPromptSection />
+        <AiHistorySection />
       </Collapsible>
     </div>
   );
@@ -455,29 +461,52 @@ function HourGrid({
   );
 }
 
+type DisplaySettingsApi = {
+  ponton_fixe_calibration_mngf: number | null;
+  ponton_amovible_calibration_mngf: number | null;
+  boat_draft_m: number;
+  vigilance_margin_m: number;
+};
+
+type CalibrationEntry = {
+  id: number;
+  lac_level_mngf: number;
+  sonar_depth_m: number;
+  calibration_mngf: number;
+  ponton: "fixe" | "amovible";
+  note: string | null;
+  created_at: string;
+};
+
 function CalibrationSection() {
-  const [calibration, setCalibration] = useState<number | null>(null);
+  const [settings, setSettings] = useState<DisplaySettingsApi | null>(null);
+  const [activePonton, setActivePonton] = useState<"fixe" | "amovible" | null>(null);
+  const [history, setHistory] = useState<CalibrationEntry[]>([]);
   const [currentLevel, setCurrentLevel] = useState<number | null>(null);
+
+  const [ponton, setPonton] = useState<"fixe" | "amovible">("fixe");
   const [profondeur, setProfondeur] = useState<string>("");
+  const [note, setNote] = useState<string>("");
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
-  const [loaded, setLoaded] = useState(false);
+
+  function refreshFromApi(d: { settings: DisplaySettingsApi; active_ponton: typeof activePonton; history: CalibrationEntry[] }) {
+    setSettings(d.settings);
+    setActivePonton(d.active_ponton);
+    setHistory(d.history);
+    // Si on a déjà des étalonnages, le radio est pré-sélectionné sur le ponton actif.
+    if (d.active_ponton) setPonton(d.active_ponton);
+  }
 
   useEffect(() => {
     Promise.all([
       fetch("/api/admin/display/calibration").then((r) => r.json()),
-      // Le niveau actuel vient de la dernière mesure scrapée. On le lit en
-      // lecture seule : c'est ce qu'on étalonne contre, pas réglable à la main.
       fetch("/api/water/recent?days=1").then((r) => r.json()),
-    ])
-      .then(([cal, water]) => {
-        if (cal.ok) setCalibration(cal.settings.ponton_calibration_mngf);
-        const measures = water.measures ?? [];
-        if (measures.length > 0) {
-          setCurrentLevel(measures[measures.length - 1].value);
-        }
-      })
-      .finally(() => setLoaded(true));
+    ]).then(([cal, water]) => {
+      if (cal.ok) refreshFromApi(cal);
+      const m = water.measures ?? [];
+      if (m.length > 0) setCurrentLevel(m[m.length - 1].value);
+    });
   }, []);
 
   async function save() {
@@ -486,13 +515,13 @@ function CalibrationSection() {
       return;
     }
     const prof = Number.parseFloat(profondeur.replace(",", "."));
-    if (!Number.isFinite(prof)) {
+    if (!Number.isFinite(prof) || prof < 0) {
       setMsg("Profondeur invalide");
       return;
     }
     const computed = currentLevel - prof;
     if (computed < 600 || computed > 700) {
-      setMsg("Calibration hors bornes (600-700 mNGF)");
+      setMsg(`Calibration hors bornes (${computed.toFixed(2)} mNGF)`);
       return;
     }
     setSaving(true);
@@ -500,73 +529,114 @@ function CalibrationSection() {
     const r = await fetch("/api/admin/display/calibration", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ponton_calibration_mngf: computed }),
+      body: JSON.stringify({
+        lac_level_mngf: currentLevel,
+        sonar_depth_m: prof,
+        ponton,
+        note: note.trim() || null,
+      }),
     });
     const d = await r.json();
     setSaving(false);
     if (d.ok) {
-      setCalibration(d.settings.ponton_calibration_mngf);
+      refreshFromApi(d);
       setProfondeur("");
-      setMsg(`✓ Calibration enregistrée : 0 m sous la coque = ${computed.toFixed(2)} mNGF`);
+      setNote("");
+      setMsg(`✓ Étalonnage ${ponton} enregistré : 0 m sous la coque = ${computed.toFixed(2)} mNGF`);
       setTimeout(() => setMsg(null), 4000);
     } else {
       setMsg("Erreur enregistrement");
     }
   }
 
-  async function reset() {
-    if (!confirm("Effacer la calibration ponton ? Le mode « Sous le ponton » deviendra indisponible.")) return;
-    setSaving(true);
-    const r = await fetch("/api/admin/display/calibration", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ponton_calibration_mngf: null }),
-    });
-    const d = await r.json();
-    setSaving(false);
-    if (d.ok) {
-      setCalibration(null);
-      setMsg("✓ Calibration effacée");
-      setTimeout(() => setMsg(null), 2000);
-    }
-  }
+  const draft = settings?.boat_draft_m ?? 1.5;
 
   return (
     <section className="space-y-3">
       <div className="rounded-lg bg-purple-50 dark:bg-purple-950/30 border-l-4 border-purple-500 px-4 py-3 text-xs leading-relaxed space-y-2 mt-3">
         <p className="font-medium text-sm">ℹ️ À quoi ça sert ?</p>
         <p>
-          La calibration permet d&apos;afficher le niveau du lac comme une{" "}<strong>profondeur sous la coque</strong>{" "}au lieu de l&apos;altitude (mNGF).
-          C&apos;est plus parlant au quotidien : « il reste 2,30 m sous la coque » plutôt que « 666,97 m d&apos;altitude ».
+          L&apos;étalonnage permet à l&apos;app de calculer{" "}<strong>combien d&apos;eau il y a sous la coque</strong>{" "}plutôt que l&apos;altitude brute (mNGF).
+          On enregistre la profondeur indiquée par le sondeur quand on est sur place ; l&apos;app suit ensuite les variations du niveau du lac.
         </p>
         <p>
-          <strong>Procédure</strong> : aller sur le bateau, lire le niveau actuel du lac sur l&apos;app (en mNGF) ET la profondeur indiquée par le sondeur. Saisir les deux valeurs ci-dessous → l&apos;app calcule le mNGF qui correspond au moment où l&apos;eau touche la coque.
+          <strong>Ponton FIXE</strong>{" "}— calibration stable, à enregistrer 1× en début de saison (ou si dérive du sondeur).
+          <br />
+          <strong>Ponton AMOVIBLE</strong>{" "}— calibration à refaire à chaque déplacement du ponton (typiquement en fin de session).
         </p>
         <p>
-          <strong>Quand recalibrer ?</strong> Jamais en théorie, sauf si le ponton est déplacé, le bateau changé, ou si on s&apos;aperçoit d&apos;une dérive (sondeur recalibré, etc.).
+          L&apos;<strong>app détecte automatiquement</strong>{" "}quel ponton est actif : c&apos;est celui du dernier étalonnage enregistré.
         </p>
       </div>
 
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded p-4 space-y-3">
-        <div className="text-sm">
-          {!loaded ? (
-            <span className="text-slate-500">Chargement…</span>
-          ) : calibration === null ? (
-            <span className="text-amber-700 dark:text-amber-400">
-              ⚠️ Pas encore calibré — le mode « Sous le ponton » n&apos;est pas disponible.
-            </span>
-          ) : (
-            <span>
-              <strong>Calibration actuelle :</strong>{" "}0 m sous la coque ={" "}
-              <code className="font-semibold">{calibration.toFixed(2)} mNGF</code>
-            </span>
-          )}
+        {/* Calibrations courantes des 2 pontons */}
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          <div
+            className={`p-2 rounded border ${
+              activePonton === "fixe"
+                ? "border-blue-500 bg-blue-50 dark:bg-blue-950/40"
+                : "border-slate-200 dark:border-slate-800"
+            }`}
+          >
+            <div className="font-semibold flex items-center justify-between">
+              <span>Ponton fixe</span>
+              {activePonton === "fixe" && <span className="text-blue-600">● actif</span>}
+            </div>
+            <div className="tabular-nums mt-1">
+              {settings?.ponton_fixe_calibration_mngf !== null && settings?.ponton_fixe_calibration_mngf !== undefined
+                ? `${settings.ponton_fixe_calibration_mngf.toFixed(2)} mNGF`
+                : "— jamais étalonné"}
+            </div>
+          </div>
+          <div
+            className={`p-2 rounded border ${
+              activePonton === "amovible"
+                ? "border-blue-500 bg-blue-50 dark:bg-blue-950/40"
+                : "border-slate-200 dark:border-slate-800"
+            }`}
+          >
+            <div className="font-semibold flex items-center justify-between">
+              <span>Ponton amovible</span>
+              {activePonton === "amovible" && <span className="text-blue-600">● actif</span>}
+            </div>
+            <div className="tabular-nums mt-1">
+              {settings?.ponton_amovible_calibration_mngf !== null && settings?.ponton_amovible_calibration_mngf !== undefined
+                ? `${settings.ponton_amovible_calibration_mngf.toFixed(2)} mNGF`
+                : "— jamais étalonné"}
+            </div>
+          </div>
         </div>
 
-        <div className="space-y-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+        {/* Nouveau saisie */}
+        <div className="space-y-2 pt-3 border-t border-slate-200 dark:border-slate-800">
           <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">
-            Nouvelle calibration
+            Nouvel étalonnage
           </p>
+
+          {/* Radio ponton */}
+          <div className="flex gap-2">
+            {(["fixe", "amovible"] as const).map((p) => (
+              <label
+                key={p}
+                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded border cursor-pointer text-xs ${
+                  ponton === p
+                    ? "bg-blue-600 text-white border-blue-600"
+                    : "bg-transparent border-slate-300 dark:border-slate-700"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="ponton"
+                  checked={ponton === p}
+                  onChange={() => setPonton(p)}
+                  className="hidden"
+                />
+                Ponton {p}
+              </label>
+            ))}
+          </div>
+
           <div className="grid grid-cols-2 gap-2">
             <div className="block">
               <span className="text-xs text-slate-500">Niveau actuel (mNGF)</span>
@@ -581,39 +651,398 @@ function CalibrationSection() {
                 inputMode="decimal"
                 value={profondeur}
                 onChange={(e) => setProfondeur(e.target.value)}
-                placeholder="2.30"
+                placeholder={`min : ${draft.toFixed(2)} m`}
                 className="w-full mt-1 px-2 py-1 rounded border border-slate-300 dark:border-slate-700 bg-transparent text-sm tabular-nums"
               />
             </label>
           </div>
-          <p className="text-[10px] text-slate-400 italic">
-            Le niveau actuel est lu automatiquement depuis la dernière mesure scrapée — non modifiable.
-          </p>
-          <div className="flex gap-2 pt-1">
-            <button
-              type="button"
-              onClick={save}
-              disabled={saving || !profondeur || currentLevel === null}
-              className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium py-2 px-4 rounded text-sm"
-            >
-              {saving ? "…" : "Enregistrer"}
-            </button>
-            {calibration !== null && (
-              <button
-                type="button"
-                onClick={reset}
-                disabled={saving}
-                className="bg-red-50 dark:bg-red-950 text-red-600 px-3 py-2 rounded text-sm"
-              >
-                Effacer
-              </button>
-            )}
-          </div>
+
+          <label className="block">
+            <span className="text-xs text-slate-500">Note (optionnel)</span>
+            <input
+              type="text"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="ex : ponton déplacé de 5m vers la rive"
+              maxLength={200}
+              className="w-full mt-1 px-2 py-1 rounded border border-slate-300 dark:border-slate-700 bg-transparent text-sm"
+            />
+          </label>
+
+          <button
+            type="button"
+            onClick={save}
+            disabled={saving || !profondeur || currentLevel === null}
+            className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium py-2 px-4 rounded text-sm"
+          >
+            {saving ? "…" : "Enregistrer l'étalonnage"}
+          </button>
         </div>
 
         {msg && <p className="text-xs text-slate-600 dark:text-slate-400">{msg}</p>}
       </div>
+
+      {/* Historique */}
+      {history.length > 0 && (
+        <details className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded">
+          <summary className="cursor-pointer px-3 py-2 text-xs font-semibold flex justify-between items-center">
+            <span>5 derniers étalonnages</span>
+            <span className="text-slate-400">▶</span>
+          </summary>
+          <div className="px-3 pb-3 space-y-1 text-xs">
+            {history.map((h) => (
+              <div key={h.id} className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 py-1 last:border-0">
+                <div>
+                  <span className="font-medium">{h.ponton}</span>
+                  <span className="text-slate-500"> · {h.created_at}</span>
+                  {h.note && <div className="text-slate-500 italic">{h.note}</div>}
+                </div>
+                <div className="tabular-nums text-slate-600 dark:text-slate-400">
+                  {h.lac_level_mngf.toFixed(2)} − {h.sonar_depth_m.toFixed(2)} = {h.calibration_mngf.toFixed(2)} mNGF
+                </div>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
     </section>
+  );
+}
+
+function BoatSection() {
+  const [draft, setDraft] = useState<string>("1.5");
+  const [margin, setMargin] = useState<string>("0.5");
+  const [loaded, setLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/admin/boat")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.ok) {
+          setDraft(String(d.boat_draft_m));
+          setMargin(String(d.vigilance_margin_m));
+        }
+      })
+      .finally(() => setLoaded(true));
+  }, []);
+
+  async function save() {
+    const d = Number.parseFloat(draft.replace(",", "."));
+    const m = Number.parseFloat(margin.replace(",", "."));
+    if (!Number.isFinite(d) || d < 0 || !Number.isFinite(m) || m < 0) {
+      setMsg("Valeurs invalides");
+      return;
+    }
+    setSaving(true);
+    setMsg(null);
+    const r = await fetch("/api/admin/boat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ boat_draft_m: d, vigilance_margin_m: m }),
+    });
+    const j = await r.json();
+    setSaving(false);
+    if (j.ok) {
+      setMsg("✓ enregistré");
+      setTimeout(() => setMsg(null), 1500);
+    } else {
+      setMsg("Erreur enregistrement");
+    }
+  }
+
+  const draftNum = Number.parseFloat(draft.replace(",", "."));
+  const marginNum = Number.parseFloat(margin.replace(",", "."));
+  const critique = Number.isFinite(draftNum) ? draftNum : null;
+  const vigilance = Number.isFinite(draftNum) && Number.isFinite(marginNum) ? draftNum + marginNum : null;
+
+  return (
+    <section className="space-y-3">
+      <div className="rounded-lg bg-cyan-50 dark:bg-cyan-950/30 border-l-4 border-cyan-500 px-4 py-3 text-xs leading-relaxed space-y-2 mt-3">
+        <p className="font-medium text-sm">ℹ️ Tirant d&apos;eau et marge de vigilance</p>
+        <p>
+          Ces deux valeurs pilotent les{" "}<strong>seuils opérationnels</strong>{" "}utilisés par la phrase IA et le calcul du risque :
+        </p>
+        <ul className="list-disc ml-5 space-y-0.5">
+          <li><strong>Tirant d&apos;eau</strong> : profondeur minimale absolue pour amarrer (= seuil critique). En dessous, la coque tape le fond.</li>
+          <li><strong>Marge de vigilance</strong> : combien de marge au-dessus du tirant pour déclencher l&apos;alerte "ça approche".</li>
+        </ul>
+      </div>
+
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded p-4 space-y-3">
+        {!loaded ? (
+          <p className="text-sm text-slate-500">Chargement…</p>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="block">
+                <span className="text-xs text-slate-500">Tirant d&apos;eau (m)</span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  className="w-full mt-1 px-2 py-1 rounded border border-slate-300 dark:border-slate-700 bg-transparent text-sm tabular-nums"
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs text-slate-500">Marge de vigilance (m)</span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={margin}
+                  onChange={(e) => setMargin(e.target.value)}
+                  className="w-full mt-1 px-2 py-1 rounded border border-slate-300 dark:border-slate-700 bg-transparent text-sm tabular-nums"
+                />
+              </label>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+              <div className="text-xs">
+                <span className="text-slate-500">Seuil critique</span>
+                <div className="text-sm font-semibold tabular-nums mt-1">
+                  {critique !== null ? `${critique.toFixed(2)} m` : "—"}
+                </div>
+              </div>
+              <div className="text-xs">
+                <span className="text-slate-500">Seuil vigilance</span>
+                <div className="text-sm font-semibold tabular-nums mt-1">
+                  {vigilance !== null ? `${vigilance.toFixed(2)} m` : "—"}
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={save}
+              disabled={saving}
+              className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium py-2 px-4 rounded text-sm"
+            >
+              {saving ? "…" : "Enregistrer"}
+            </button>
+
+            {msg && <p className="text-xs text-slate-500 text-center">{msg}</p>}
+          </>
+        )}
+      </div>
+    </section>
+  );
+}
+
+type AiHistoryEntry = {
+  id: number;
+  created_at: string;
+  type: string;
+  model: string | null;
+  system_prompt: string | null;
+  prompt: string;
+  response: string;
+  total_tokens: number | null;
+};
+
+function AiHistorySection() {
+  const [entries, setEntries] = useState<AiHistoryEntry[] | null>(null);
+  const [loaded, setLoaded] = useState(false);
+
+  async function load() {
+    const r = await fetch("/api/admin/ai/history?limit=20");
+    const d = await r.json();
+    if (d.ok) setEntries(d.history);
+    setLoaded(true);
+  }
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  return (
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded p-3 mt-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold">📊 Historique des générations</p>
+        <button
+          type="button"
+          onClick={load}
+          className="text-[10px] text-slate-500 underline"
+        >
+          Rafraîchir
+        </button>
+      </div>
+      <p className="text-[10px] text-slate-500">
+        Les 20 dernières générations IA. Clique sur une ligne pour voir le prompt complet (system + user) et la réponse exacte qui a été générée.
+      </p>
+
+      {!loaded ? (
+        <p className="text-xs text-slate-500">Chargement…</p>
+      ) : !entries || entries.length === 0 ? (
+        <p className="text-xs text-slate-500">Aucune génération encore enregistrée.</p>
+      ) : (
+        <div className="space-y-1 max-h-96 overflow-y-auto">
+          {entries.map((e) => {
+            const preview = e.response.length > 80 ? e.response.slice(0, 80) + "…" : e.response;
+            return (
+              <details
+                key={e.id}
+                className="text-xs border border-slate-200 dark:border-slate-800 rounded"
+              >
+                <summary className="cursor-pointer px-2 py-1.5 flex justify-between items-start gap-2">
+                  <div className="flex-1">
+                    <div className="text-slate-500 text-[10px]">{e.created_at} · {e.type}{e.total_tokens ? ` · ${e.total_tokens} tokens` : ""}</div>
+                    <div className="mt-0.5">{preview}</div>
+                  </div>
+                </summary>
+                <div className="px-2 py-2 space-y-2 border-t border-slate-200 dark:border-slate-800">
+                  <div>
+                    <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">System prompt</div>
+                    <pre className="text-[10px] mt-1 whitespace-pre-wrap text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 p-2 rounded">
+                      {e.system_prompt ?? "— (avant V2.3, non logué)"}
+                    </pre>
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">User prompt</div>
+                    <pre className="text-[10px] mt-1 whitespace-pre-wrap text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 p-2 rounded">
+                      {e.prompt}
+                    </pre>
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Réponse</div>
+                    <pre className="text-[10px] mt-1 whitespace-pre-wrap text-slate-900 dark:text-slate-100 bg-emerald-50 dark:bg-emerald-950/30 p-2 rounded">
+                      {e.response}
+                    </pre>
+                  </div>
+                </div>
+              </details>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SystemPromptSection() {
+  const [prompt, setPrompt] = useState<string>("");
+  const [defaultPrompt, setDefaultPrompt] = useState<string>("");
+  const [loaded, setLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [history, setHistory] = useState<Array<{ id: number; prompt: string; created_at: string }>>([]);
+  const [showHistory, setShowHistory] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/admin/ai/system-prompt")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.ok) {
+          setPrompt(d.prompt);
+          setDefaultPrompt(d.default_prompt);
+        }
+      })
+      .finally(() => setLoaded(true));
+  }, []);
+
+  async function loadHistory() {
+    const r = await fetch("/api/admin/ai/system-prompt/history");
+    const d = await r.json();
+    if (d.ok) setHistory(d.history);
+  }
+
+  async function save() {
+    if (!prompt.trim()) {
+      setMsg("Le system prompt ne peut pas être vide");
+      return;
+    }
+    setSaving(true);
+    setMsg(null);
+    const r = await fetch("/api/admin/ai/system-prompt", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt }),
+    });
+    const d = await r.json();
+    setSaving(false);
+    if (d.ok) {
+      setMsg("✓ enregistré (version précédente archivée dans l'historique)");
+      setTimeout(() => setMsg(null), 3000);
+    } else {
+      setMsg("Erreur enregistrement");
+    }
+  }
+
+  function restoreDefault() {
+    if (!confirm("Restaurer le system prompt par défaut ? La version actuelle sera archivée.")) return;
+    setPrompt(defaultPrompt);
+  }
+
+  return (
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded p-3 mt-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold">📝 System prompt (ton + contexte)</p>
+        <button
+          type="button"
+          onClick={restoreDefault}
+          className="text-[10px] text-slate-500 underline"
+        >
+          Restaurer le défaut
+        </button>
+      </div>
+
+      {!loaded ? (
+        <p className="text-xs text-slate-500">Chargement…</p>
+      ) : (
+        <>
+          <textarea
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            rows={14}
+            className="w-full px-2 py-1.5 rounded border border-slate-300 dark:border-slate-700 bg-transparent text-xs font-mono leading-relaxed"
+          />
+          <button
+            type="button"
+            onClick={save}
+            disabled={saving}
+            className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium py-2 px-4 rounded text-sm"
+          >
+            {saving ? "…" : "Enregistrer le system prompt"}
+          </button>
+
+          {msg && <p className="text-xs text-slate-500">{msg}</p>}
+
+          <button
+            type="button"
+            onClick={() => {
+              if (!showHistory) loadHistory();
+              setShowHistory(!showHistory);
+            }}
+            className="text-xs text-slate-500 underline"
+          >
+            {showHistory ? "Masquer" : "Afficher"} l&apos;historique des modifications
+          </button>
+
+          {showHistory && history.length > 0 && (
+            <div className="space-y-2 mt-2 max-h-64 overflow-y-auto">
+              {history.map((h) => (
+                <details key={h.id} className="text-xs border border-slate-200 dark:border-slate-800 rounded">
+                  <summary className="cursor-pointer px-2 py-1 text-slate-500">
+                    {h.created_at}
+                  </summary>
+                  <pre className="px-2 py-1 text-[10px] whitespace-pre-wrap text-slate-700 dark:text-slate-300">{h.prompt}</pre>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (confirm("Restaurer cette version ?")) setPrompt(h.prompt);
+                    }}
+                    className="text-[10px] text-blue-600 underline mx-2 mb-2"
+                  >
+                    Restaurer cette version
+                  </button>
+                </details>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
   );
 }
 

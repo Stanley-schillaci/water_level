@@ -1,7 +1,5 @@
-import AIBanner from "@/components/AIBanner";
 import {
   getAvailableYears,
-  getLatestAICommentary,
   getRecentMeasures,
   getThresholds,
 } from "@/lib/db";
@@ -24,7 +22,6 @@ function Delta({ label, v }: { label: string; v: number | null }) {
 }
 
 export default function AnnualPage() {
-  const banner = getLatestAICommentary("comparaison_annuelle");
   const available = getAvailableYears();
   const longMeasures = getRecentMeasures(365 * 4);
   const annual = computeAnnualKpis(longMeasures);
@@ -45,7 +42,6 @@ export default function AnnualPage() {
   return (
     <div className="space-y-8">
       <section>
-        <AIBanner text={banner} />
         <div className="grid grid-cols-3 gap-2 mb-4">
           <Delta label={`VS ${currentYear - 1}`} v={annual.vsY1} />
           <Delta label={`VS ${currentYear - 2}`} v={annual.vsY2} />
