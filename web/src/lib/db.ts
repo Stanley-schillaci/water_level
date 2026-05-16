@@ -572,3 +572,25 @@ export function getLatestAICommentary(kind: "tendance" | "comparaison_annuelle")
     .get(kind) as { response: string } | undefined;
   return row?.response ?? null;
 }
+
+/**
+ * Renvoie la phrase IA la plus récente + son âge en minutes calculé en SQL.
+ * On passe par SQL (`strftime('%s', 'now') - strftime('%s', created_at)`) car
+ * `gpt_logs.created_at` est stocké en UTC (CURRENT_TIMESTAMP SQLite) ; calculer
+ * l'âge côté JS demanderait de forcer la conversion timezone et c'est piégeux.
+ */
+export function getLatestAICommentaryWithAge(
+  kind: "tendance" | "comparaison_annuelle",
+): { text: string; ageMinutes: number } | null {
+  const db = getDb();
+  const row = db
+    .prepare(
+      `SELECT response,
+              CAST((strftime('%s','now') - strftime('%s', created_at)) / 60 AS INTEGER) AS age_minutes
+       FROM gpt_logs
+       WHERE type = ? ORDER BY created_at DESC, id DESC LIMIT 1`,
+    )
+    .get(kind) as { response: string; age_minutes: number } | undefined;
+  if (!row) return null;
+  return { text: row.response, ageMinutes: Math.max(0, row.age_minutes ?? 0) };
+}

@@ -1,7 +1,7 @@
 import AIBanner from "@/components/AIBanner";
 import KpiGrid from "@/components/KpiGrid";
 import LevelHero from "@/components/LevelHero";
-import { getLatestAICommentary, getRecentMeasures, getThresholds } from "@/lib/db";
+import { getLatestAICommentaryWithAge, getRecentMeasures, getThresholds } from "@/lib/db";
 import { computeKpis } from "@/lib/kpi";
 import DaysSelectorWithChart from "./_DaysSelectorWithChart";
 
@@ -10,12 +10,12 @@ export const dynamic = "force-dynamic";
 export default async function NowPage() {
   const measures7d = getRecentMeasures(7);
   const kpis = computeKpis(measures7d);
-  const banner = getLatestAICommentary("tendance");
+  const banner = getLatestAICommentaryWithAge("tendance");
   const thresholds = getThresholds();
 
   return (
     <div>
-      <AIBanner text={banner} />
+      <AIBanner text={banner?.text ?? null} ageMinutes={banner?.ageMinutes ?? null} />
       <LevelHero kpis={kpis} />
       <KpiGrid kpis={kpis} />
       <DaysSelectorWithChart
