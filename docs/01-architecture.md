@@ -83,16 +83,19 @@ Laetis API ─→ scraper.py ─→ niveau_eau.db (table water_level)
                        (évite de re-cogner l'API à l'infini sur des jours blancs)
 ```
 
-### 2. Génération IA (1× / jour, 07:00 Europe/Paris)
+### 2. Génération IA (cadence configurable, V2.3)
 
 ```
-ai-refresher.py
-  ├─ Lit toutes les mesures (table water_level)
-  ├─ Calcule les KPIs (niveau, deltas, comparaison annuelle)
-  ├─ Lit les seuils actifs (table threshold_line)
-  ├─ Construit 2 prompts (tendance + comparaison annuelle)
-  ├─ Appelle GPT-4o ×2
-  └─ Stocke réponses + tokens dans gpt_logs (type='tendance' ou 'comparaison_annuelle')
+ai-refresher.py (tick toutes les heures à xx:55, Europe/Paris)
+  ├─ Lit ai_policy → decide-t-on de générer ? (selon mois + heure courante)
+  │   • Si oui : continue. Si non : skip silencieux.
+  ├─ Lit display_settings (calibrations + tirant + marge + system_prompt)
+  ├─ Lit calibration_history → ponton actif + fraîcheur
+  ├─ Lit threshold_line (repères perso pour le prompt)
+  ├─ Lit gpt_logs : 7 dernières phrases (continuité narrative)
+  ├─ Construit user prompt avec toutes ces données
+  ├─ Appelle GPT-5 (system + user, reasoning_effort=minimal)
+  └─ Stocke {model, system_prompt, prompt, response, tokens} dans gpt_logs
 ```
 
 ### 3. Consultation (à chaque visite)
@@ -113,8 +116,7 @@ Next.js (App Router, SSR)
   │       (courbe segmentée colorée selon la pente locale, palette V1)
   ├─ Page /annuel (émoji 📈) — 2 sections empilées :
   │   ├─ Comparaison annuelle :
-  │   │   ├─ getLatestAICommentary('comparaison_annuelle') → bannière
-  │   │   ├─ computeAnnualKpis() côté serveur (VS Y-1, Y-2, Y-3)
+  │   │   ├─ computeAnnualKpis() côté serveur (VS Y-1, Y-2, Y-3) — pas de phrase IA depuis V2.3
   │   │   └─ AnnualChart côté client : fetch /api/water/yearly?years=...
   │   └─ Historique complet :
   │       └─ FullHistoryChart côté client : fetch /api/water/full

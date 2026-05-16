@@ -262,7 +262,7 @@ Toutes en `export const dynamic = "force-dynamic"` pour empêcher Next.js de ten
 GET /api/water/recent?days=N        → mesures détaillées (datetime + value) sur N jours
 GET /api/water/yearly?years=2025,…  → 1 mesure/jour par année (la première du jour)
 GET /api/water/full                 → 1 mesure/jour depuis 2021-07-07
-GET /api/ai/commentary?kind=…       → dernière phrase IA (tendance | comparaison_annuelle)
+GET /api/ai/commentary?kind=tendance → dernière phrase IA (seul `tendance` est généré depuis V2.3)
 GET /api/ai/status                  → { last_run_at, last_run_status } — consommé par BottomNav (badge ⚠️)
 GET /api/display/settings           → { ponton_calibration_mngf, min_historical } — consommé par DisplayProvider
 GET /api/thresholds                 → liste des seuils actifs

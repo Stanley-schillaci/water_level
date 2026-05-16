@@ -211,36 +211,40 @@ Compare le niveau actuel à celui des 3 dernières années à la même date.
 
 ## Module `ai.py`
 
-Génération des phrases IA via GPT-4o. Le timer systemd tape **toutes les heures à xx:55** ; `cli.ai_refresher_main` lit la table `ai_policy` et le module [`policy.py`](#module-policypy) décide si on génère ou si on skip.
+Génération de **la phrase IA "tendance"** via **GPT-5** (depuis V2.3). Le timer systemd tape **toutes les heures à xx:55** ; `cli.ai_refresher_main` lit la table `ai_policy` et le module [`policy.py`](#module-policypy) décide si on génère ou si on skip. La phrase "comparaison annuelle" a été **supprimée** en V2.3 (doublonnait les KPIs VS 2024/2023/2022).
 
-### Prompts
+### Architecture des prompts (V2.3) — system + user
 
-Deux prompts distincts :
-- **`build_commentary_prompt(kpis, thresholds)`** — pour la phrase de tendance ("Reculer le bateau, niveau actuel proche du seuil 'Ponton max'…")
-- **`build_annual_prompt(kpis, current_year)`** — pour la comparaison annuelle ("Le niveau actuel est plus bas que les 3 dernières années à la même date.")
+Depuis V2.3, on utilise le pattern natif OpenAI `messages: [{role:'system'}, {role:'user'}]` :
 
-Les prompts incluent :
-- Le contexte métier (bateau, ponton, tirant d'eau 0,4 m)
-- Les valeurs courantes (niveau, deltas, tendance)
-- Les seuils actifs
-- Une instruction stricte : "UNE PHRASE" en français, claire et concise
+- **System prompt** : long, descriptif (contexte du lac, des 2 pontons, du bateau, des règles). **Éditable depuis `/admin > 🤖 Phrases IA`**. Stocké dans `display_settings.ai_system_prompt`, historisé dans `system_prompt_history` à chaque édition. Le défaut (constante `DEFAULT_AI_SYSTEM_PROMPT` en sync avec `web/src/lib/db.ts`) est seedé via `init_db`.
+- **User prompt** : construit auto par `build_user_prompt(kpis, settings, active_ponton, last_calibration, threshold_lines, recent_messages, now)`. Contient :
+  - Niveau actuel + ponton actif + calibration courante (et son âge en jours)
+  - Profondeur sous coque calculée
+  - Tirant d'eau + marge vigilance + seuils dérivés
+  - Variations (J-1, J-3, J-7) + tendance 7 jours
+  - Repères personnels (`threshold_line`) avec leur description
+  - Les **7 dernières phrases IA** (continuité narrative, pas pour éviter la répétition)
 
-### `call_openai(*, client, db_path, prompt, kind, max_tokens, temperature)`
+### `call_openai(*, client, db_path, system_prompt, user_prompt, kind, max_tokens, temperature)`
 
-Wrappe l'appel à `openai.chat.completions.create`. **Persiste systématiquement le résultat** dans `gpt_logs` (avec model, prompt, réponse, tokens).
+Wrappe `openai.chat.completions.create`. Conditionne les kwargs selon la famille de modèle :
+- **GPT-5+** : `reasoning_effort="minimal"` + `max_completion_tokens`. Pas de `temperature` (ignoré par les modèles reasoning).
+- **GPT-4o et antérieurs** : `temperature` + `max_tokens` classiques.
 
-Modèle : `gpt-4o`, température 0.7 pour tendance, 0.5 pour annual (moins de fantaisie).
+**Persiste systématiquement** dans `gpt_logs` avec `model`, `system_prompt`, `prompt` (user), `response`, tokens — visible dans `/admin > 🤖 Phrases IA > 📊 Historique des générations` pour audit complet.
 
-### `run_ai_refresher(*, client, db_path) -> {tendance, comparaison_annuelle}`
+Modèle actuel : **`gpt-5`** avec `reasoning_effort=minimal`. Voir constante `MODEL` en haut du fichier pour switcher.
 
-Workflow complet :
-1. `compute_kpis()` — si pas de mesures (DB vide), skip et retourne `{None, None}`
-2. Charge les seuils actifs (`_load_thresholds`)
-3. Construit et envoie le prompt "tendance" → log + return
-4. `compute_annual_comparison()`
-5. Construit et envoie le prompt "comparaison_annuelle" → log + return
+### `run_ai_refresher(*, client, db_path) -> {tendance}`
 
-**Coût** : ~600 tokens in + ~120 tokens out par appel × 2 appels = ~0,003€ par génération. Avec la cadence par défaut (4×/jour mai-août, 1×/jour reste de l'année) ≈ ~750 générations/an, soit **~2,3€/an** ou **~0,20€/mois**.
+Workflow V2.3 :
+1. `compute_kpis()` — si pas de mesures (DB vide), skip et retourne `{tendance: None}`
+2. Charge `display_settings`, `active_ponton` (dernière entrée `calibration_history`), `last_calibration`, `threshold_lines`, et les **7 dernières phrases IA**
+3. Construit `user_prompt` via `build_user_prompt(...)`, lit `system_prompt` depuis `display_settings.ai_system_prompt`
+4. `call_openai(...)` → log + return
+
+**Coût** : ~1000 tokens in + ~80 tokens out par génération à GPT-5 ($1.25/M in, $10/M out) ≈ ~0,002€ par génération. Avec ~750 générations/an : **~0,25€/mois**.
 
 ---
 

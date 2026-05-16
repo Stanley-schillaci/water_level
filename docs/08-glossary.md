@@ -27,7 +27,7 @@ Procédure faite 1× par l'admin pour activer le mode « Sous le ponton ». Sur 
 Opérateur du barrage du lac des Saints Peyres, qui expose l'API publique `data.niv-eau.fr` pour les niveaux d'eau.
 
 **Tirant d'eau**
-Profondeur de la partie immergée d'un bateau. Le bateau de papa a un tirant d'eau de 0,4 m → il a besoin d'au moins 0,4 m d'eau sous la coque pour ne pas toucher le fond.
+Profondeur de la partie immergée d'un bateau. Le bateau de papa a un tirant d'eau de **0,80 m** (V2.3+) → il faut au moins 80 cm d'eau sous la coque pour amarrer sans risque. Au-dessous, la coque tape le fond. La valeur est paramétrable depuis `/admin > ⚓ Bateau`.
 
 **Ponton flottant**
 Plateforme flottante reliée à la berge par une passerelle articulée. Suit le niveau de l'eau mais peut se désaccoupler de la berge si le niveau descend trop bas (ou inversement, monter trop haut).

@@ -45,8 +45,8 @@ Stockage : **un seul fichier SQLite** (`/var/lib/lac/niveau_eau.db`) partagé en
 │ total_tokens (INT)         │
 │ created_at                 │    ┌────────────────────────────┐
 │ type (TEXT)                │    │ ai_policy (singleton id=1) │
-│   = 'tendance' OU          │    │────────────────────────────│
-│     'comparaison_annuelle' │    │ enabled (0/1)              │
+│   = 'tendance'             │    │────────────────────────────│
+│ system_prompt (TEXT, V2.3) │    │ enabled (0/1)              │
 └────────────────────────────┘    │ high_season_months (CSV)   │
                                   │ high_season_hours (CSV)    │
 NOTE: pas de FK entre les tables. │ low_season_hours (CSV)     │
@@ -107,7 +107,7 @@ CREATE TABLE threshold_line (
 ```sql
 CREATE TABLE gpt_logs (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
-    model               TEXT,           -- 'gpt-4o'
+    model               TEXT,           -- 'gpt-5' (V2.3+), 'gpt-4o' avant
     prompt              TEXT,           -- le user prompt envoyé (V2.3+)
     response            TEXT,           -- la phrase générée
     prompt_tokens       INTEGER,
