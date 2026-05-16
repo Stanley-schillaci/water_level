@@ -201,7 +201,7 @@ function ThresholdsSection({
           </li>
           <li>
             <strong>Dans le prompt GPT</strong> — chaque seuil (nom + description + valeur) est injecté dans le prompt
-            envoyé à GPT-4o chaque matin pour générer la phrase de tendance. Plus la description est riche,
+            envoyé à GPT-5 lors des générations pour rédiger la phrase de tendance. Plus la description est riche,
             plus l&apos;IA peut nuancer sa recommandation.
           </li>
         </ol>

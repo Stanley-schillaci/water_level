@@ -40,7 +40,7 @@ Refonte majeure pour aligner l'app sur la **réalité opérationnelle** au lac :
 - `display_settings` stocke désormais **2 calibrations en parallèle** (`ponton_fixe_calibration_mngf` + `ponton_amovible_calibration_mngf`).
 - Le **ponton actif** est déduit du dernier étalonnage enregistré dans la nouvelle table `calibration_history` (tag `ponton: fixe | amovible`).
 - L'étalonnage devient une opération de routine (à chaque fin de session pour l'amovible, rare pour le fixe).
-- Le bateau a un tirant d'eau réel de **80 cm** (et non 1,5 m comme assumé en V2.2). Marge de vigilance à 1,10 m.
+- Le bateau a un tirant d'eau réel de **80 cm** (et non 1,5 m comme assumé en V2.2). Marge de vigilance à 30 cm (soit un seuil "ça approche" à 1,10 m sous la coque).
 
 **Refactor IA** :
 - Suppression complète de la phrase "comparaison annuelle" (doublonnait les KPIs VS 2024/2023).

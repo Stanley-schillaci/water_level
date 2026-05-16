@@ -377,7 +377,7 @@ ssh lac "sudo -u app sqlite3 /var/lib/lac/niveau_eau.db '
 '"
 ```
 
-À ~$2.5/M input + $10/M output (tarif GPT-4o mai 2026), on est largement sous 0,10€/mois.
+À ~$1.25/M input + $10/M output (tarif GPT-5 mai 2026), on est largement sous 0,10€/mois.
 
 ---
 

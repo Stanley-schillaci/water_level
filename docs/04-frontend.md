@@ -127,7 +127,7 @@ Pas de titre de page (juste un lien « Déconnexion » en haut à droite). 4 sec
 
 1. **📐 Étalonnage du ponton** (V2.3, ouvert par défaut) — gère les 2 calibrations en parallèle (ponton fixe + amovible). 2 cartes en haut affichent la calibration courante de chaque ponton avec un badge « ● actif » sur celui du dernier étalonnage. Formulaire : niveau actuel **en lecture seule** (depuis `/api/water/recent?days=1`) + radio « Ponton fixe / amovible » + profondeur sondeur (éditable) + note optionnelle. Chaque enregistrement insère dans `calibration_history` ET met à jour la calibration courante du ponton concerné dans `display_settings`. Historique des 5 derniers étalonnages en dépliable.
 
-2. **⚓ Bateau** (V2.3) — 2 champs : tirant d'eau (m, défaut 0,80) et marge de vigilance (m, défaut 1,10). Les **2 seuils opérationnels** sont dérivés et affichés en read-only (seuil critique = tirant, seuil vigilance = tirant + marge). Stocké dans `display_settings.boat_draft_m` + `vigilance_margin_m`.
+2. **⚓ Bateau** (V2.3) — 2 champs : tirant d'eau (m, défaut 0,80) et marge de vigilance (m, défaut 0,30). Les **2 seuils opérationnels** sont dérivés et affichés en read-only (seuil critique = tirant 0,80 m, seuil vigilance = tirant + marge = 1,10 m). Stocké dans `display_settings.boat_draft_m` + `vigilance_margin_m`.
 
 3. **📍 Seuils visuels** — bloc explicatif "À quoi servent les seuils ?" (2 usages : lignes sur les graphs + injection dans le prompt IA) puis CRUD complet de la table `threshold_line`.
 

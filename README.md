@@ -58,7 +58,7 @@ L'API publique **`data.niv-eau.fr`** (Laetis, opérateur du barrage) publie le n
 | Composant | Rôle | Quand |
 |---|---|---|
 | **scraper.py** (Python) | Récupère les mesures Laetis, écrit dans la DB | Cron toutes les 20 min |
-| **ai-refresher.py** (Python) | Génère la phrase IA (GPT-4o, prompt system+user) selon la cadence configurée | Cron toutes les heures (xx:55), la policy décide |
+| **ai-refresher.py** (Python) | Génère la phrase IA (GPT-5, prompt system+user) selon la cadence configurée | Cron toutes les heures (xx:55), la policy décide |
 | **Next.js** (TypeScript) | Sert l'app web (4 pages : 💧 / 📈 / ⚙️ / admin) | Daemon always-on |
 
 L'**isolation des processus** permet : (1) que le scraping ne dépende pas de la consultation web, (2) que la phrase IA soit pré-calculée et donc instantanée à servir, (3) que Next.js n'ait qu'à **lire** la DB.
@@ -119,7 +119,7 @@ Le `VPS=lac` réfère à l'alias SSH dans `~/.ssh/config` (à configurer une foi
 | **Next.js 15 + ECharts** plutôt que Streamlit | UX mobile native (gestures touch fluides sur iPhone) |
 | **SQLite (gardée)** plutôt que PostgreSQL | 1 utilisateur, simplicité, fichier unique, déjà 1 an de données |
 | **Cron Python séparé** plutôt que tout-Node | Réutilise le code V1 rodé depuis 1 an, isolation propre |
-| **GPT-4o 1×/jour** plutôt que à chaque visite | Pré-calculé en DB, zéro latence côté front, ~0,10€/mois |
+| **GPT-5 plusieurs fois/jour** (cadence configurée) plutôt qu'à chaque visite | Pré-calculé en DB, zéro latence côté front, ~0,10€/mois |
 | **Caddy** plutôt que nginx | TLS Let's Encrypt automatique en 3 lignes de config |
 | **Pas de domaine perso** | Sous-domaine OVH suffit, économie 10€/an |
 | **`empty_days` (nouveau)** remplace `ignore_dates.yaml` | Auto-détection des jours sans donnée API → plus de maintenance manuelle |

@@ -117,17 +117,20 @@ Fonction injectée comme paramètre dans un test. Permet de partager du setup (e
 
 ## OpenAI / LLM
 
-**GPT-4o**
-Modèle d'OpenAI utilisé pour générer les phrases IA. Bon compromis qualité/coût (~$2.5/M tokens input, $10/M output en mai 2026).
+**GPT-5**
+Modèle d'OpenAI utilisé pour générer la phrase IA (V2.3+). Moins cher que GPT-4o sur l'input (~$1.25/M tokens input, $10/M output en mai 2026), meilleure adhérence aux instructions, meilleur français. Utilisé avec `reasoning_effort=minimal` car la tâche est descriptive (pas du raisonnement complexe), ce qui évite la facturation de reasoning tokens additionnels.
+
+**system + user prompt**
+Pattern OpenAI Chat Completions à 2 messages. Le **system prompt** est statique (éditable par papa dans `/admin`), décrit le contexte métier et le style attendu. Le **user prompt** est construit à chaque tick avec les données temps réel (niveau, calibration, ponton actif, seuils dérivés, repères personnels, 7 dernières phrases pour continuité). Les 2 sont loggés dans `gpt_logs`.
+
+**reasoning_effort** (GPT-5 only)
+Paramètre OpenAI qui contrôle la quantité de "thinking" interne du modèle avant de répondre. Valeurs : `minimal | low | medium | high`. À `minimal`, GPT-5 répond presque sans reasoning tokens — idéal pour les tâches descriptives. À `high`, il pense plus longtemps (coûte plus, plus lent). Sur ce projet : `minimal`.
 
 **Tokens**
-Unité de facturation OpenAI. 1 token ≈ 0,75 mots en français. Une phrase de 200 caractères ≈ 50 tokens.
+Unité de facturation OpenAI. 1 token ≈ 0,75 mots en français. Une phrase de 200 caractères ≈ 50 tokens. GPT-5 utilise `max_completion_tokens` (englobe les reasoning tokens), GPT-4o utilisait `max_tokens`.
 
 **Prompt**
-Texte envoyé au modèle pour obtenir une réponse. Le projet construit 2 prompts (commentary + annual), avec contexte métier, données et instructions strictes ("UNE PHRASE en français").
-
-**Température**
-Paramètre OpenAI entre 0 et 2. Bas (0.0-0.5) = réponses plus déterministes/répétables. Haut (0.7-1.5) = plus créatives/variables. On utilise 0.7 pour la tendance (un peu de variation, plus humain) et 0.5 pour la comparaison annuelle (plus factuel).
+Texte envoyé au modèle pour obtenir une réponse. Le projet construit un **system prompt** (éditable, contexte+style) et un **user prompt** (données temps réel), envoyés en un seul appel `chat.completions.create`. Une seule phrase est demandée en sortie.
 
 ---
 

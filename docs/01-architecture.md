@@ -36,9 +36,9 @@ L'application est composée de **3 processus indépendants** qui tournent sur **
 │   ┌────────────────────────────────────┐  │   • gpt_logs                   │           │
 │   │ lac-ai.service (Python)             │  │   • empty_days                 │           │
 │   │ • calcule les KPIs                  │  └──────────┬───────────────────┘             │
-│   │ • call OpenAI GPT-4o ×2             │             ▲                                │
+│   │ • call OpenAI GPT-5 (system+user)   │             ▲                                │
 │   │ • stocke réponses dans gpt_logs     │             │ lectures + écritures           │
-│   │ • timer systemd quotidien 07:00     │─────────────┤   (better-sqlite3)             │
+│   │ • timer systemd toutes les heures   │─────────────┤   (better-sqlite3)             │
 │   └────────────────────────────────────┘             │                                 │
 │                                                       │                                │
 │   ┌────────────────────────────────────┐             │                                 │

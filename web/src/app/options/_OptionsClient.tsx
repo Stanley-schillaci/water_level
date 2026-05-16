@@ -315,23 +315,14 @@ export default function OptionsClient({
           </summary>
           <div className="text-xs text-slate-600 dark:text-slate-400 mt-2 leading-relaxed space-y-2">
             <p>
-              <strong>Il y a deux phrases IA distinctes</strong>, générées par GPT-4o selon une cadence configurable (voir plus bas) :
+              <strong>Une phrase IA</strong>{" "}est générée par GPT-5 selon une cadence configurable (voir plus bas), affichée
+              en haut de la page d&apos;accueil 💧. GPT reçoit la profondeur sous la coque, la tendance récente, le tirant d&apos;eau,
+              la marge de vigilance et les <strong>seuils définis par l&apos;admin</strong>. Il rédige une phrase courte qui
+              décrit la situation (en hausse / en baisse / stable, niveau de risque par rapport au tirant).
             </p>
-            <ol className="list-decimal ml-5 space-y-1">
-              <li>
-                <strong>Sur la page d&apos;accueil 💧</strong> (« phrase tendance ») — GPT reçoit le niveau actuel, les variations
-                récentes (VS hier, 3 j, 7 j), la tendance 7 j et les <strong>seuils définis par l&apos;admin</strong>.
-                Il génère une recommandation pour le bateau : ne rien faire, le reculer un peu, ou le déplacer ailleurs.
-              </li>
-              <li>
-                <strong>Sur la page 📈</strong> (« phrase annuelle ») — GPT reçoit uniquement le niveau actuel
-                et les comparaisons VS 2024 / 2023 / 2022. Il génère une phrase neutre du genre
-                « Le niveau est plus haut/bas que les années précédentes ».
-              </li>
-            </ol>
             <p>
-              Les deux phrases sont <strong>stockées en base de données</strong>{" "}et servies statiquement à chaque visite (pas d&apos;appel à OpenAI à chaque page load).
-              Conséquence : la phrase reste identique entre 2 générations.
+              La phrase est <strong>stockée en base</strong>{" "}et servie statiquement à chaque visite (pas d&apos;appel à OpenAI
+              à chaque page load). Conséquence : elle reste identique entre 2 générations.
             </p>
             <p>
               <strong>La cadence est réglable depuis le panel admin</strong>{" "}(section « 🤖 Phrases IA »). On définit :
@@ -369,7 +360,7 @@ export default function OptionsClient({
                 <strong>Sur les graphs</strong> : une ligne horizontale pointillée (couleur et style configurables) pour visualiser à quel niveau se trouve le seuil par rapport au niveau actuel.
               </li>
               <li>
-                <strong>Dans le prompt GPT</strong>{" "}: nom + description + valeur sont injectés dans le prompt envoyé à GPT-4o chaque matin.
+                <strong>Dans le prompt GPT</strong>{" "}: nom + description + valeur sont injectés dans le prompt envoyé à GPT-5 lors des générations.
                 Plus la description est riche, plus l&apos;IA peut nuancer sa recommandation (« Reculer le bateau, le niveau approche le seuil critique X… »).
               </li>
             </ol>
