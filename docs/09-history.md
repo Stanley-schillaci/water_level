@@ -30,6 +30,28 @@ Une seule session de travail (~6h) :
 
 URL principale : `https://gothis.duckdns.org/` (DuckDNS, gratuit, mémorisable). `https://vps-9bc559d8.vps.ovh.net/` reste actif en filet de sécurité. Streamlit Cloud reste up en backup. Cutover définitif prévu à J+30 si tout est stable.
 
+### 2026-05-16 (soir) — V2.2 : référentiels d'affichage relatifs
+
+La donnée brute publiée par Laetis est en mNGF (altitude par rapport au niveau de la mer), donc 666,97 m ne dit pas grand chose à un humain : la région du Tarn est elle-même à ~600 m d'altitude, le lac n'est pas profond de 666 m. Pour rendre la donnée actionnable au quotidien, ajout de **3 référentiels d'affichage interchangeables** :
+
+- **Altitude (mNGF)** — la valeur brute, défaut conservé.
+- **Sous le ponton** — profondeur d'eau sous la coque du bateau, calibrée 1× par l'admin (on note `niveau_lac` et `profondeur_sondeur` sur place, l'app stocke `calibration_mngf = niveau − profondeur`). Peut être négatif si le lac descend sous le ponton — c'est précisément le signal qu'il faut déplacer le bateau.
+- **Depuis le minimum historique** — hauteur au-dessus du record bas calculé sur l'historique complet (633,66 m le 1er nov. 2022).
+
+**Implémentation** :
+- Nouvelle table SQLite `display_settings` (singleton, juste la calibration ponton, auto-bootstrap idempotent côté Next.js).
+- Le minimum historique est calculé à la volée par `SELECT MIN(value)`, pas stocké.
+- 3 routes API : `GET /api/display/settings` (public), `GET/POST /api/admin/display/calibration` (admin).
+- 1 lib `web/src/lib/levelDisplay.ts` qui centralise conversions + formatage (auto m↔cm pour les petits deltas).
+- 1 React Provider `DisplayProvider` au layout qui lit le mode stocké + les refs, exposés via `useDisplay()`.
+- Sections UI : « Affichage du niveau » dans `/options` (radios), « 📐 Étalonnage du ponton » dans `/admin` (niveau actuel en lecture seule + champ profondeur sondeur).
+- Composants mis à jour : `LevelHero`, `KpiGrid`, `WaterChart`, `ColoredCurveChart`. Les seuils, le tooltip et l'axe Y sont tous convertis dans le référentiel courant. Précision forcée à `.toFixed(2)` pour éviter les artefacts flottants des conversions.
+
+**Tradeoffs assumés** :
+- Le switch est global, pas par-graph (un seul mode pour toute l'app). Simple et cohérent.
+- La phrase IA reste en mNGF (le prompt n'est pas mis à jour, ce sera fait dans un futur refactor IA).
+- Le mode « Sous le ponton » est désactivé tant que la calibration n'est pas posée par l'admin.
+
 ### 2026-05-16 — V2.1 : cadence IA configurable
 
 Itération sur la feature IA :

@@ -181,6 +181,23 @@ CREATE TABLE ai_policy (
 
 **Edit via** : `/admin` (section « 🤖 Phrases IA ») → routes `GET/POST /api/admin/ai/policy`. Le worker tourne en cron horaire (`xx:55`) et appelle `should_generate_now()` à chaque tick (cf [03-worker-python.md](03-worker-python.md)).
 
+### `display_settings` — étalonnage du référentiel d'affichage (V2.2)
+
+Singleton (id=1) qui stocke uniquement la calibration ponton. Le minimum historique est calculé à la volée avec `SELECT MIN(value) FROM water_level`, pas besoin de le stocker.
+
+```sql
+CREATE TABLE display_settings (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    ponton_calibration_mngf REAL,      -- mNGF tel que 0 m = coque du bateau touche l'eau
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+- `ponton_calibration_mngf` est `NULL` tant que l'admin n'a pas étalonné → le mode « Sous le ponton » est grisé dans l'UI.
+- Édit via `/admin` (section « 📐 Étalonnage ») → routes `GET/POST /api/admin/display/calibration` (admin) et `GET /api/display/settings` (public, retourne calibration + min historique pour le DisplayProvider client).
+
+**Auto-bootstrap** : la table + la ligne sont créées idempotemment par `web/lib/db.ts::ensureDisplaySettings()`. Le worker Python n'a pas besoin de cette table.
+
 ---
 
 ## Mode WAL (Write-Ahead Logging)

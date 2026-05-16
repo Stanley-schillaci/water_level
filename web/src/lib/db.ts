@@ -243,6 +243,76 @@ export function getAiStatus(): { last_run_at: string | null; last_run_status: "o
   };
 }
 
+// --- Display settings -------------------------------------------------------
+//
+// Singleton (id=1) qui stocke l'étalonnage du référentiel "Sous le ponton".
+// Auto-bootstrap idempotent.
+
+export type DisplaySettings = {
+  ponton_calibration_mngf: number | null;
+  updated_at: string;
+};
+
+function ensureDisplaySettings(): void {
+  const db = getDb();
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS display_settings (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      ponton_calibration_mngf REAL,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  db.prepare(
+    `INSERT OR IGNORE INTO display_settings (id, ponton_calibration_mngf)
+     VALUES (1, NULL)`
+  ).run();
+}
+
+export function getDisplaySettings(): DisplaySettings {
+  ensureDisplaySettings();
+  const db = getDb();
+  const row = db
+    .prepare(
+      `SELECT ponton_calibration_mngf, updated_at FROM display_settings WHERE id = 1`
+    )
+    .get() as { ponton_calibration_mngf: number | null; updated_at: string };
+  return row;
+}
+
+export function savePontonCalibration(value_mngf: number | null): void {
+  ensureDisplaySettings();
+  const db = getDb();
+  db.prepare(
+    `UPDATE display_settings
+     SET ponton_calibration_mngf = ?, updated_at = CURRENT_TIMESTAMP
+     WHERE id = 1`
+  ).run(value_mngf);
+}
+
+export type LevelReferences = {
+  ponton_calibration_mngf: number | null;
+  min_historical: { value: number; date: string } | null;
+};
+
+export function getLevelReferences(): LevelReferences {
+  // Endpoint public consommé par le DisplayContext côté client.
+  ensureDisplaySettings();
+  const db = getDb();
+  const settings = db
+    .prepare(`SELECT ponton_calibration_mngf FROM display_settings WHERE id = 1`)
+    .get() as { ponton_calibration_mngf: number | null };
+  const min = db
+    .prepare(
+      `SELECT value, date_event FROM water_level
+       ORDER BY value ASC LIMIT 1`
+    )
+    .get() as { value: number; date_event: string } | undefined;
+  return {
+    ponton_calibration_mngf: settings?.ponton_calibration_mngf ?? null,
+    min_historical: min ? { value: min.value, date: min.date_event } : null,
+  };
+}
+
 export function getLatestAICommentary(kind: "tendance" | "comparaison_annuelle"): string | null {
   const db = getDb();
   const row = db

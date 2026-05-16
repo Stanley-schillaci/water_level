@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import AppShell from "@/components/AppShell";
+import { DisplayProvider } from "@/components/DisplayProvider";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -39,7 +40,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP }} />
       </head>
       <body>
-        <AppShell>{children}</AppShell>
+        <DisplayProvider>
+          <AppShell>{children}</AppShell>
+        </DisplayProvider>
       </body>
     </html>
   );

@@ -126,18 +126,62 @@ export default function AdminClient({
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-base font-semibold">⚙️ Panel admin</h2>
+    <div className="space-y-3">
+      <div className="flex justify-end">
         <button onClick={logout} className="text-xs text-slate-500 underline">
           Déconnexion
         </button>
       </div>
 
-      <AiPolicySection />
+      <Collapsible title="📐 Étalonnage du ponton" defaultOpen>
+        <CalibrationSection />
+      </Collapsible>
 
-      <h3 className="text-base font-semibold pt-4">📍 Seuils</h3>
+      <Collapsible title="📍 Seuils">
+        <ThresholdsSection thresholds={thresholds} onChanged={refresh} />
+      </Collapsible>
 
+      <Collapsible title="🤖 Phrases IA">
+        <AiPolicySection />
+      </Collapsible>
+    </div>
+  );
+}
+
+function Collapsible({
+  title,
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <details
+      className="group bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800"
+      open={defaultOpen}
+    >
+      <summary className="cursor-pointer flex justify-between items-center px-4 py-3 select-none">
+        <span className="text-base font-semibold">{title}</span>
+        <span className="text-slate-400 group-open:rotate-90 transition-transform">▶</span>
+      </summary>
+      <div className="px-4 pb-4 pt-1 border-t border-slate-200 dark:border-slate-800">
+        {children}
+      </div>
+    </details>
+  );
+}
+
+function ThresholdsSection({
+  thresholds,
+  onChanged,
+}: {
+  thresholds: Threshold[];
+  onChanged: () => void;
+}) {
+  return (
+    <div className="space-y-3 pt-3">
       <div className="rounded-lg bg-blue-50 dark:bg-blue-950/40 border-l-4 border-blue-500 px-4 py-3 text-xs leading-relaxed space-y-2">
         <p className="font-medium text-sm">ℹ️ À quoi servent les seuils ?</p>
         <p>
@@ -163,10 +207,10 @@ export default function AdminClient({
         </p>
       </div>
 
-      <ThresholdForm onSaved={refresh} />
+      <ThresholdForm onSaved={onChanged} />
       <div className="space-y-2">
         {thresholds.map((t) => (
-          <ThresholdItem key={t.id} t={t} onChanged={refresh} />
+          <ThresholdItem key={t.id} t={t} onChanged={onChanged} />
         ))}
         {thresholds.length === 0 && (
           <p className="text-sm text-slate-500">Aucun seuil défini.</p>
@@ -262,9 +306,7 @@ function AiPolicySection() {
 
   return (
     <section className="space-y-3">
-      <h3 className="text-base font-semibold">🤖 Phrases IA</h3>
-
-      <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 border-l-4 border-amber-500 px-4 py-3 text-xs leading-relaxed space-y-2">
+      <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 border-l-4 border-amber-500 px-4 py-3 text-xs leading-relaxed space-y-2 mt-3">
         <p className="font-medium text-sm">ℹ️ Comment ça marche</p>
         <p>
           Un worker tourne <strong>toutes les heures à xx:55</strong>{" "}(heure de Paris). À chaque tick :
@@ -410,6 +452,168 @@ function HourGrid({
         })}
       </div>
     </div>
+  );
+}
+
+function CalibrationSection() {
+  const [calibration, setCalibration] = useState<number | null>(null);
+  const [currentLevel, setCurrentLevel] = useState<number | null>(null);
+  const [profondeur, setProfondeur] = useState<string>("");
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    Promise.all([
+      fetch("/api/admin/display/calibration").then((r) => r.json()),
+      // Le niveau actuel vient de la dernière mesure scrapée. On le lit en
+      // lecture seule : c'est ce qu'on étalonne contre, pas réglable à la main.
+      fetch("/api/water/recent?days=1").then((r) => r.json()),
+    ])
+      .then(([cal, water]) => {
+        if (cal.ok) setCalibration(cal.settings.ponton_calibration_mngf);
+        const measures = water.measures ?? [];
+        if (measures.length > 0) {
+          setCurrentLevel(measures[measures.length - 1].value);
+        }
+      })
+      .finally(() => setLoaded(true));
+  }, []);
+
+  async function save() {
+    if (currentLevel === null) {
+      setMsg("Niveau actuel indisponible");
+      return;
+    }
+    const prof = Number.parseFloat(profondeur.replace(",", "."));
+    if (!Number.isFinite(prof)) {
+      setMsg("Profondeur invalide");
+      return;
+    }
+    const computed = currentLevel - prof;
+    if (computed < 600 || computed > 700) {
+      setMsg("Calibration hors bornes (600-700 mNGF)");
+      return;
+    }
+    setSaving(true);
+    setMsg(null);
+    const r = await fetch("/api/admin/display/calibration", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ponton_calibration_mngf: computed }),
+    });
+    const d = await r.json();
+    setSaving(false);
+    if (d.ok) {
+      setCalibration(d.settings.ponton_calibration_mngf);
+      setProfondeur("");
+      setMsg(`✓ Calibration enregistrée : 0 m sous la coque = ${computed.toFixed(2)} mNGF`);
+      setTimeout(() => setMsg(null), 4000);
+    } else {
+      setMsg("Erreur enregistrement");
+    }
+  }
+
+  async function reset() {
+    if (!confirm("Effacer la calibration ponton ? Le mode « Sous le ponton » deviendra indisponible.")) return;
+    setSaving(true);
+    const r = await fetch("/api/admin/display/calibration", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ponton_calibration_mngf: null }),
+    });
+    const d = await r.json();
+    setSaving(false);
+    if (d.ok) {
+      setCalibration(null);
+      setMsg("✓ Calibration effacée");
+      setTimeout(() => setMsg(null), 2000);
+    }
+  }
+
+  return (
+    <section className="space-y-3">
+      <div className="rounded-lg bg-purple-50 dark:bg-purple-950/30 border-l-4 border-purple-500 px-4 py-3 text-xs leading-relaxed space-y-2 mt-3">
+        <p className="font-medium text-sm">ℹ️ À quoi ça sert ?</p>
+        <p>
+          La calibration permet d&apos;afficher le niveau du lac comme une{" "}<strong>profondeur sous la coque</strong>{" "}au lieu de l&apos;altitude (mNGF).
+          C&apos;est plus parlant au quotidien : « il reste 2,30 m sous la coque » plutôt que « 666,97 m d&apos;altitude ».
+        </p>
+        <p>
+          <strong>Procédure</strong> : aller sur le bateau, lire le niveau actuel du lac sur l&apos;app (en mNGF) ET la profondeur indiquée par le sondeur. Saisir les deux valeurs ci-dessous → l&apos;app calcule le mNGF qui correspond au moment où l&apos;eau touche la coque.
+        </p>
+        <p>
+          <strong>Quand recalibrer ?</strong> Jamais en théorie, sauf si le ponton est déplacé, le bateau changé, ou si on s&apos;aperçoit d&apos;une dérive (sondeur recalibré, etc.).
+        </p>
+      </div>
+
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded p-4 space-y-3">
+        <div className="text-sm">
+          {!loaded ? (
+            <span className="text-slate-500">Chargement…</span>
+          ) : calibration === null ? (
+            <span className="text-amber-700 dark:text-amber-400">
+              ⚠️ Pas encore calibré — le mode « Sous le ponton » n&apos;est pas disponible.
+            </span>
+          ) : (
+            <span>
+              <strong>Calibration actuelle :</strong>{" "}0 m sous la coque ={" "}
+              <code className="font-semibold">{calibration.toFixed(2)} mNGF</code>
+            </span>
+          )}
+        </div>
+
+        <div className="space-y-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+          <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+            Nouvelle calibration
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="block">
+              <span className="text-xs text-slate-500">Niveau actuel (mNGF)</span>
+              <div className="w-full mt-1 px-2 py-1 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 text-sm tabular-nums text-slate-700 dark:text-slate-300">
+                {currentLevel !== null ? currentLevel.toFixed(2) : "—"}
+              </div>
+            </div>
+            <label className="block">
+              <span className="text-xs text-slate-500">Profondeur sondeur (m)</span>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={profondeur}
+                onChange={(e) => setProfondeur(e.target.value)}
+                placeholder="2.30"
+                className="w-full mt-1 px-2 py-1 rounded border border-slate-300 dark:border-slate-700 bg-transparent text-sm tabular-nums"
+              />
+            </label>
+          </div>
+          <p className="text-[10px] text-slate-400 italic">
+            Le niveau actuel est lu automatiquement depuis la dernière mesure scrapée — non modifiable.
+          </p>
+          <div className="flex gap-2 pt-1">
+            <button
+              type="button"
+              onClick={save}
+              disabled={saving || !profondeur || currentLevel === null}
+              className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium py-2 px-4 rounded text-sm"
+            >
+              {saving ? "…" : "Enregistrer"}
+            </button>
+            {calibration !== null && (
+              <button
+                type="button"
+                onClick={reset}
+                disabled={saving}
+                className="bg-red-50 dark:bg-red-950 text-red-600 px-3 py-2 rounded text-sm"
+              >
+                Effacer
+              </button>
+            )}
+          </div>
+        </div>
+
+        {msg && <p className="text-xs text-slate-600 dark:text-slate-400">{msg}</p>}
+      </div>
+    </section>
   );
 }
 

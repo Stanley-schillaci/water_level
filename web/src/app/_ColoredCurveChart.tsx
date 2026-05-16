@@ -3,6 +3,8 @@
 import ReactECharts from "echarts-for-react";
 import { useMemo } from "react";
 import type { ChartThreshold } from "@/components/WaterChart";
+import { useDisplay } from "@/components/DisplayProvider";
+import { convertValue, unitLabel } from "@/lib/levelDisplay";
 
 type Measure = { datetime_event: string; value: number };
 
@@ -69,16 +71,29 @@ export default function ColoredCurveChart({
   thresholds,
   segmentSizeHours = 1,
   slopeThreshold = 0.03,
-  yLabel = "Niveau (m)",
+  yLabel,
   height = 300,
 }: Props) {
+  const { mode, refs } = useDisplay();
+  const convertOrSelf = (v: number): number => {
+    const c = convertValue(v, mode, refs);
+    return c === null ? v : c;
+  };
+  const effectiveYLabel = yLabel ?? `Niveau (${unitLabel(mode)})`;
+
   const option = useMemo(() => {
-    const resampled = resampleHourly(measures, segmentSizeHours);
+    // On resample d'abord (sur les valeurs brutes mNGF), puis on convertit
+    // les valeurs présentées. La pente reste inchangée par offset constant.
+    const resampledMngf = resampleHourly(measures, segmentSizeHours);
+    const resampled = resampledMngf.map((m) => ({
+      datetime_event: m.datetime_event,
+      value: convertOrSelf(m.value),
+    }));
     if (resampled.length < 2) {
       return {
         grid: { left: 40, right: 12, top: 16, bottom: 24 },
         xAxis: { type: "time" as const },
-        yAxis: { type: "value" as const, name: yLabel, scale: true },
+        yAxis: { type: "value" as const, name: effectiveYLabel, scale: true },
         series: [],
       };
     }
@@ -132,7 +147,7 @@ export default function ColoredCurveChart({
               silent: true,
               lineStyle: { type: "dashed" as const },
               data: thresholds.map((t) => ({
-                yAxis: t.value,
+                yAxis: convertOrSelf(t.value),
                 lineStyle: { color: t.color, type: t.dashStyle ?? "dashed" },
                 label: {
                   formatter: t.name,
@@ -162,7 +177,12 @@ export default function ColoredCurveChart({
             hour: "2-digit",
             minute: "2-digit",
           });
-          return `${dt}<br/><b>${main.value[1].toFixed(2)} m</b>`;
+          // main.value[1] est déjà converti dans le référentiel courant.
+          const v = main.value[1];
+          const formatted = Math.abs(v) < 1 && mode !== "mngf"
+            ? `${Math.round(v * 100)} cm`
+            : `${v.toFixed(2)} m`;
+          return `${dt}<br/><b>${formatted}</b>`;
         },
       },
       xAxis: {
@@ -172,15 +192,21 @@ export default function ColoredCurveChart({
       },
       yAxis: {
         type: "value" as const,
-        name: yLabel,
+        name: effectiveYLabel,
         nameTextStyle: { fontSize: 10 },
         scale: true,
-        axisLabel: { fontSize: 10 },
+        axisLabel: {
+          fontSize: 10,
+          // Force 2 décimales sur les graduations (sinon les conversions
+          // mNGF→ponton/min sortent des "2.299999996" dûs aux flottants).
+          formatter: (v: number) => v.toFixed(2),
+        },
       },
       dataZoom: [{ type: "inside" as const }],
       series: [...segmentSeries, tooltipSeries],
     };
-  }, [measures, thresholds, segmentSizeHours, slopeThreshold, yLabel]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [measures, thresholds, segmentSizeHours, slopeThreshold, effectiveYLabel, mode, refs.ponton_calibration_mngf, refs.min_historical?.value]);
 
   return (
     <div

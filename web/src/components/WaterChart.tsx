@@ -2,6 +2,8 @@
 
 import ReactECharts from "echarts-for-react";
 import { useMemo } from "react";
+import { useDisplay } from "@/components/DisplayProvider";
+import { convertValue, unitLabel } from "@/lib/levelDisplay";
 
 export type ChartPoint = { x: string; y: number };
 export type ChartLine = { name: string; data: ChartPoint[]; color?: string };
@@ -25,15 +27,21 @@ const ACCENT = "#2563eb";
 export default function WaterChart({
   lines,
   thresholds = [],
-  yLabel = "Niveau (m)",
+  yLabel,
   xAxisType = "time",
   height = 280,
 }: Props) {
+  const { mode, refs } = useDisplay();
+  const convertOrSelf = (v: number): number => {
+    const c = convertValue(v, mode, refs);
+    return c === null ? v : c;
+  };
+  const effectiveYLabel = yLabel ?? `Niveau (${unitLabel(mode)})`;
   const option = useMemo(() => {
     const series = lines.map((l, i) => ({
       name: l.name,
       type: "line" as const,
-      data: l.data.map((p) => [p.x, p.y]),
+      data: l.data.map((p) => [p.x, convertOrSelf(p.y)]),
       showSymbol: false,
       smooth: 0.2,
       // `color` au niveau série pilote la pastille du tooltip ; sans ça
@@ -64,7 +72,7 @@ export default function WaterChart({
               silent: true,
               lineStyle: { type: "dashed" as const },
               data: thresholds.map((t) => ({
-                yAxis: t.value,
+                yAxis: convertOrSelf(t.value),
                 lineStyle: { color: t.color, type: t.dashStyle ?? "dashed" },
                 label: {
                   formatter: t.name,
@@ -78,7 +86,14 @@ export default function WaterChart({
     }));
     return {
       grid: { left: 40, right: 12, top: 16, bottom: 24 },
-      tooltip: { trigger: "axis", confine: true },
+      tooltip: {
+        trigger: "axis",
+        confine: true,
+        // Force 2 décimales pour éviter "2.299999996" lié aux flottants après
+        // conversion (mNGF − calibration ponton, par exemple).
+        valueFormatter: (v: unknown) =>
+          typeof v === "number" ? `${v.toFixed(2)} m` : String(v),
+      },
       xAxis: {
         type: xAxisType,
         axisLabel: { fontSize: 10 },
@@ -86,17 +101,22 @@ export default function WaterChart({
       },
       yAxis: {
         type: "value",
-        name: yLabel,
+        name: effectiveYLabel,
         nameTextStyle: { fontSize: 10 },
         scale: true,
-        axisLabel: { fontSize: 10 },
+        axisLabel: {
+          fontSize: 10,
+          // Idem pour les graduations de l'axe.
+          formatter: (v: number) => v.toFixed(2),
+        },
       },
       legend:
         lines.length > 1 ? { bottom: 0, type: "scroll" as const, itemHeight: 8 } : undefined,
       dataZoom: [{ type: "inside" as const }],
       series,
     };
-  }, [lines, thresholds, xAxisType, yLabel]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lines, thresholds, xAxisType, effectiveYLabel, mode, refs.ponton_calibration_mngf, refs.min_historical?.value]);
 
   return (
     <div

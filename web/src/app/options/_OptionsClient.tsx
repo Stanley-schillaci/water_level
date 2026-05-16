@@ -2,6 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useDisplay } from "@/components/DisplayProvider";
+import {
+  ALL_MODES,
+  MODE_LABELS,
+  type DisplayMode,
+  isModeAvailable,
+} from "@/lib/levelDisplay";
 
 type ThemePref = "system" | "light" | "dark";
 
@@ -92,6 +99,9 @@ export default function OptionsClient({
 
   return (
     <div className="space-y-5">
+      {/* AFFICHAGE DU NIVEAU */}
+      <DisplayModeSection />
+
       {/* THÈME */}
       <Section title="Thème">
         <div className="space-y-1">
@@ -123,55 +133,7 @@ export default function OptionsClient({
         </div>
       </Section>
 
-      {/* MONITORING */}
-      <Section title="Monitoring">
-        <ul className="text-sm space-y-2">
-          <li className="flex items-center justify-between">
-            <span className="text-slate-600 dark:text-slate-400">Dernière mesure</span>
-            <span className="font-medium">
-              <StatusDot status={ageStatus(lastMeasureAt, 120)} />
-              {formatFr(lastMeasureAt)} <span className="text-slate-500 text-xs">({relativeAge(lastMeasureAt)})</span>
-            </span>
-          </li>
-          <li className="flex items-center justify-between">
-            <span className="text-slate-600 dark:text-slate-400">Dernière phrase IA (tendance)</span>
-            <span className="font-medium">
-              <StatusDot status={!hasLastTendance ? "missing" : ageStatus(lastTendanceAt, 36 * 60)} />
-              <span className="text-slate-500 text-xs">{relativeAge(lastTendanceAt)}</span>
-            </span>
-          </li>
-          <li className="flex items-center justify-between">
-            <span className="text-slate-600 dark:text-slate-400">Dernière phrase IA (annuelle)</span>
-            <span className="font-medium">
-              <StatusDot status={!hasLastAnnual ? "missing" : ageStatus(lastAnnualAt, 36 * 60)} />
-              <span className="text-slate-500 text-xs">{relativeAge(lastAnnualAt)}</span>
-            </span>
-          </li>
-          <li className="flex items-center justify-between">
-            <span className="text-slate-600 dark:text-slate-400">Mesures stockées</span>
-            <span className="font-medium tabular-nums">{totalMeasures.toLocaleString("fr-FR")}</span>
-          </li>
-          <li className="flex items-center justify-between">
-            <span className="text-slate-600 dark:text-slate-400">Taille de la base</span>
-            <span className="font-medium">{dbSizeMb !== null ? `${dbSizeMb} MB` : "—"}</span>
-          </li>
-        </ul>
-      </Section>
-
-      {/* ADMIN */}
-      <Section title="Administration">
-        <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
-          Le panel admin sert à gérer les <strong>lignes de seuil</strong>{" "}(les valeurs critiques affichées sur les graphs et utilisées par l&apos;IA).
-        </p>
-        <Link
-          href="/admin"
-          className="inline-block w-full text-center bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-lg"
-        >
-          🔐 Accéder au panel admin
-        </Link>
-      </Section>
-
-      {/* EXPLICATIONS */}
+      {/* FAQ — placée avant Monitoring/Admin selon préférence utilisateur */}
       <Section title="Comment ça marche ?">
         <details className="group py-2 border-b border-slate-200 dark:border-slate-800">
           <summary className="cursor-pointer text-sm font-medium flex justify-between items-center">
@@ -187,6 +149,57 @@ export default function OptionsClient({
               Notre serveur interroge cette API toutes les 20 minutes pour récupérer les nouvelles mesures et les stocker dans la base.
               Si l&apos;API ne renvoie rien pour un jour donné (panne capteur, maintenance), on retente pendant 7 jours,
               puis on marque le jour comme "définitivement blanc" pour ne plus interroger inutilement.
+            </p>
+          </div>
+        </details>
+
+        <details className="group py-2 border-b border-slate-200 dark:border-slate-800">
+          <summary className="cursor-pointer text-sm font-medium flex justify-between items-center">
+            <span>C&apos;est quoi le « mNGF » ?</span>
+            <span className="text-slate-400 group-open:rotate-90 transition-transform">▶</span>
+          </summary>
+          <div className="text-xs text-slate-600 dark:text-slate-400 mt-2 leading-relaxed space-y-2">
+            <p>
+              <strong>mNGF</strong>{" "}= « mètre NGF », pour <em>Nivellement Général de la France</em>. C&apos;est le système d&apos;altitude officiel français.
+              Le zéro de référence (0 mNGF) correspond au{" "}<strong>niveau moyen de la mer à Marseille</strong>{" "}(mesuré par le marégraphe de Marseille, qui sert de point de repère depuis 1897).
+            </p>
+            <p>
+              <strong>Donc quand on dit « le lac est à 666,97 mNGF »</strong>, ça veut dire que la surface de l&apos;eau au niveau du barrage se trouve à 666,97 m au-dessus du niveau de la mer.
+              Ce n&apos;est pas la <em>profondeur</em> du lac (qui est variable selon où on se trouve).
+            </p>
+            <p>
+              Comme la région du Tarn est déjà en altitude, le niveau du lac varie typiquement entre <strong>633 m</strong>{" "}(minimum historique, automne 2022) et environ <strong>670 m</strong>{" "}en eaux hautes. C&apos;est l&apos;information brute publiée par Laetis (l&apos;opérateur du barrage).
+            </p>
+            <p>
+              Pour rendre la donnée plus parlante au quotidien, on peut basculer l&apos;affichage vers d&apos;autres référentiels (voir question suivante).
+            </p>
+          </div>
+        </details>
+
+        <details className="group py-2 border-b border-slate-200 dark:border-slate-800">
+          <summary className="cursor-pointer text-sm font-medium flex justify-between items-center">
+            <span>« Sous le ponton », « Depuis le minimum » : c&apos;est quoi ces référentiels ?</span>
+            <span className="text-slate-400 group-open:rotate-90 transition-transform">▶</span>
+          </summary>
+          <div className="text-xs text-slate-600 dark:text-slate-400 mt-2 leading-relaxed space-y-2">
+            <p>
+              Le niveau brut (en mNGF, voir ci-dessus) est précis mais peu intuitif. L&apos;app propose <strong>3 référentiels d&apos;affichage</strong>{" "}interchangeables dans la section « Affichage du niveau » plus haut. La donnée stockée reste toujours la même (mNGF), on change juste la manière de l&apos;afficher.
+            </p>
+            <ul className="list-disc ml-5 space-y-1">
+              <li>
+                <strong>Altitude (mNGF)</strong>{" "}— la valeur brute. Bien pour comparer dans le temps long, pas très parlant au jour le jour.
+              </li>
+              <li>
+                <strong>Sous le ponton</strong>{" "}— combien d&apos;eau il y a sous la coque du bateau. Calculé à partir d&apos;une calibration faite par l&apos;admin (sur le bateau, on note le niveau actuel ET la profondeur indiquée par le sondeur ; l&apos;app déduit le mNGF qui correspond au « 0 m sous la coque »).
+                Exemple : si l&apos;app indique <em>2,30 m sous la coque</em>, ça veut dire qu&apos;il reste 2,30 m d&apos;eau sous le bateau au ponton (potentiellement négatif si le lac descend sous le ponton — il faut alors déplacer le bateau).
+              </li>
+              <li>
+                <strong>Depuis le minimum historique</strong>{" "}— combien de mètres au-dessus du plus bas niveau jamais enregistré. Le minimum est calculé automatiquement (la valeur la plus basse de toute la base de données). Garanti positif (sauf nouveau record bas).
+              </li>
+            </ul>
+            <p>
+              <strong>Le réglage est personnel</strong>{" "}(stocké dans le navigateur, comme le thème). Tu peux switcher quand tu veux, ça n&apos;affecte pas les autres utilisateurs.
+              L&apos;étalonnage du ponton, lui, est partagé entre tous (c&apos;est dans l&apos;admin).
             </p>
           </div>
         </details>
@@ -365,7 +378,103 @@ export default function OptionsClient({
 
       </Section>
 
+      {/* MONITORING */}
+      <Section title="Monitoring">
+        <ul className="text-sm space-y-2">
+          <li className="flex items-center justify-between">
+            <span className="text-slate-600 dark:text-slate-400">Dernière mesure</span>
+            <span className="font-medium">
+              <StatusDot status={ageStatus(lastMeasureAt, 120)} />
+              {formatFr(lastMeasureAt)} <span className="text-slate-500 text-xs">({relativeAge(lastMeasureAt)})</span>
+            </span>
+          </li>
+          <li className="flex items-center justify-between">
+            <span className="text-slate-600 dark:text-slate-400">Dernière phrase IA (tendance)</span>
+            <span className="font-medium">
+              <StatusDot status={!hasLastTendance ? "missing" : ageStatus(lastTendanceAt, 36 * 60)} />
+              <span className="text-slate-500 text-xs">{relativeAge(lastTendanceAt)}</span>
+            </span>
+          </li>
+          <li className="flex items-center justify-between">
+            <span className="text-slate-600 dark:text-slate-400">Dernière phrase IA (annuelle)</span>
+            <span className="font-medium">
+              <StatusDot status={!hasLastAnnual ? "missing" : ageStatus(lastAnnualAt, 36 * 60)} />
+              <span className="text-slate-500 text-xs">{relativeAge(lastAnnualAt)}</span>
+            </span>
+          </li>
+          <li className="flex items-center justify-between">
+            <span className="text-slate-600 dark:text-slate-400">Mesures stockées</span>
+            <span className="font-medium tabular-nums">{totalMeasures.toLocaleString("fr-FR")}</span>
+          </li>
+          <li className="flex items-center justify-between">
+            <span className="text-slate-600 dark:text-slate-400">Taille de la base</span>
+            <span className="font-medium">{dbSizeMb !== null ? `${dbSizeMb} MB` : "—"}</span>
+          </li>
+        </ul>
+      </Section>
+
+      {/* PANEL ADMIN */}
+      <Section title="Panel admin">
+        <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
+          Le panel admin sert à gérer l&apos;<strong>étalonnage du ponton</strong>, les{" "}<strong>seuils</strong>{" "}affichés sur les graphs et la{" "}<strong>cadence de génération des phrases IA</strong>.
+        </p>
+        <Link
+          href="/admin"
+          className="inline-block w-full text-center bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-lg"
+        >
+          🔐 Accéder au panel admin
+        </Link>
+      </Section>
+
       <p className="text-xs text-slate-400 text-center pb-2">v2 · {process.env.NODE_ENV === "production" ? "prod" : "dev"}</p>
     </div>
+  );
+}
+
+function DisplayModeSection() {
+  const { mode, refs, ready, setMode } = useDisplay();
+
+  const descriptions: Record<DisplayMode, string> = {
+    mngf: "L'altitude absolue par rapport au niveau de la mer. La donnée brute publiée par Laetis.",
+    ponton: refs.ponton_calibration_mngf !== null
+      ? `Profondeur sous la coque du bateau. 0 m = niveau ${refs.ponton_calibration_mngf.toFixed(2)} mNGF (calibré par l'admin).`
+      : "Indisponible — pas encore étalonné. Demander à l'admin de calibrer le ponton.",
+    min: refs.min_historical !== null
+      ? `Hauteur depuis le minimum historique (${refs.min_historical.value.toFixed(2)} m, le ${refs.min_historical.date}).`
+      : "Indisponible — pas assez de données.",
+  };
+
+  return (
+    <Section title="Affichage du niveau">
+      <div className="space-y-1">
+        {ALL_MODES.map((m) => {
+          const available = isModeAvailable(m, refs);
+          return (
+            <label
+              key={m}
+              className={`flex items-start gap-3 p-2 rounded ${
+                available
+                  ? "cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800"
+                  : "opacity-50 cursor-not-allowed"
+              }`}
+            >
+              <input
+                type="radio"
+                name="displayMode"
+                checked={mode === m}
+                disabled={!available}
+                onChange={() => available && setMode(m)}
+                className="accent-blue-600 mt-1"
+              />
+              <div className="flex-1">
+                <div className="text-sm font-medium">{MODE_LABELS[m]}</div>
+                <div className="text-xs text-slate-500">{descriptions[m]}</div>
+              </div>
+            </label>
+          );
+        })}
+        {!ready && <p className="text-xs text-slate-500 px-2">Chargement des références…</p>}
+      </div>
+    </Section>
   );
 }

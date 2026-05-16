@@ -10,7 +10,18 @@ Termes techniques et métier utilisés dans le projet, expliqués pour ne plus a
 Lac de retenue artificiel situé dans le Tarn (Occitanie), créé par le barrage des Saints-Peyres en 1932. Réservoir hydroélectrique de ~110 hectares.
 
 **mNGF — mètres NGF (Nivellement Général de la France)**
-Unité officielle d'altitude en France. Référence : niveau moyen de la mer à Marseille (marégraphe de 1897). Le niveau du lac est exprimé en mètres mNGF (typiquement entre 660 et 670 m).
+Unité officielle d'altitude en France. 0 mNGF = niveau moyen de la mer à Marseille (mesuré par le marégraphe de Marseille, en service depuis 1897). Le niveau du lac est exprimé en mètres mNGF (typiquement entre 633 m — record bas de 2022 — et 670 m en eaux hautes). C'est l'unité dans laquelle Laetis publie la donnée brute, donc l'unité stockée en DB.
+
+**Référentiel d'affichage**
+L'app supporte 3 manières d'afficher le niveau (réglage perso dans `/options`) :
+1. **Altitude (mNGF)** — la valeur brute (ex : 666.97 m).
+2. **Sous le ponton** — profondeur d'eau sous la coque du bateau, calculée à partir d'une calibration (ex : 2,30 m sous la coque). Disponible uniquement si l'admin a étalonné le ponton.
+3. **Depuis le minimum historique** — hauteur au-dessus du record bas (ex : +33,3 m depuis le min). Le minimum est `MIN(value) FROM water_level` recalculé à chaque requête.
+
+La donnée stockée reste toujours en mNGF, on convertit à l'affichage seulement (cf `lib/levelDisplay.ts`).
+
+**Étalonnage ponton**
+Procédure faite 1× par l'admin pour activer le mode « Sous le ponton ». Sur le bateau, l'admin note la profondeur indiquée par le sondeur quand le bateau est sur son ponton. L'app calcule `ponton_calibration_mngf = niveau_actuel − profondeur_sondeur` et le stocke dans `display_settings.ponton_calibration_mngf`. Tant que le ponton n'est pas déplacé ni le bateau changé, cette valeur reste valide.
 
 **Laetis**
 Opérateur du barrage du lac des Saints Peyres, qui expose l'API publique `data.niv-eau.fr` pour les niveaux d'eau.
