@@ -56,8 +56,31 @@ SCHEMA = [
         attempts INTEGER NOT NULL DEFAULT 1
     )
     """,
+    # Singleton: il y a toujours exactement une ligne (id=1).
+    # CSV pour high_season_months / *_hours : ex "5,6,7,8" et "6,10,14,18".
+    # IMPORTANT : les heures sont en heure de Paris (cf policy.py).
+    """
+    CREATE TABLE IF NOT EXISTS ai_policy (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        enabled INTEGER NOT NULL DEFAULT 1,
+        high_season_months TEXT NOT NULL DEFAULT '5,6,7,8',
+        high_season_hours TEXT NOT NULL DEFAULT '6,10,14,18',
+        low_season_hours TEXT NOT NULL DEFAULT '7',
+        last_run_at DATETIME,
+        last_run_status TEXT,
+        last_error TEXT,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+    """,
     "CREATE INDEX IF NOT EXISTS idx_water_level_date_event ON water_level(date_event)",
 ]
+
+
+# Singleton seed inserted by init_db if absent (idempotent).
+_AI_POLICY_SEED = """
+INSERT OR IGNORE INTO ai_policy (id, enabled, high_season_months, high_season_hours, low_season_hours)
+VALUES (1, 1, '5,6,7,8', '6,10,14,18', '7')
+"""
 
 
 # --- Connection helpers -----------------------------------------------------
@@ -82,6 +105,7 @@ def init_db(db_path: Path) -> None:
         conn.execute("PRAGMA journal_mode = WAL")
         for stmt in SCHEMA:
             conn.execute(stmt)
+        conn.execute(_AI_POLICY_SEED)
 
 
 # --- water_level operations -------------------------------------------------
@@ -247,6 +271,60 @@ def load_all_measures(db_path: Path) -> list[dict]:
             "SELECT date_event, datetime_event, value, unit FROM water_level ORDER BY datetime_event"
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+# --- ai_policy helpers ------------------------------------------------------
+
+
+def get_ai_policy(db_path: Path) -> dict:
+    """Return the singleton ai_policy row as a dict (always exists post-init)."""
+    with connect(db_path) as conn:
+        row = conn.execute("SELECT * FROM ai_policy WHERE id = 1").fetchone()
+    return dict(row)
+
+
+def save_ai_policy(
+    db_path: Path,
+    *,
+    enabled: bool,
+    high_season_months: str,
+    high_season_hours: str,
+    low_season_hours: str,
+) -> None:
+    """Update the singleton policy. Updates `updated_at`."""
+    with connect(db_path) as conn:
+        conn.execute(
+            """
+            UPDATE ai_policy
+            SET enabled = ?,
+                high_season_months = ?,
+                high_season_hours = ?,
+                low_season_hours = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = 1
+            """,
+            (1 if enabled else 0, high_season_months, high_season_hours, low_season_hours),
+        )
+
+
+def mark_ai_run(
+    db_path: Path,
+    *,
+    status: str,
+    error: str | None = None,
+) -> None:
+    """Persist the outcome of an ai-refresher tick. status: 'ok'|'failed'|'skipped'."""
+    with connect(db_path) as conn:
+        conn.execute(
+            """
+            UPDATE ai_policy
+            SET last_run_at = CURRENT_TIMESTAMP,
+                last_run_status = ?,
+                last_error = ?
+            WHERE id = 1
+            """,
+            (status, error),
+        )
 
 
 def load_first_measure_per_day(db_path: Path) -> list[dict]:

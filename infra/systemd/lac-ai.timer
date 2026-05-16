@@ -1,9 +1,10 @@
 [Unit]
-Description=Lac — generate AI commentary once a day at 07:00
+Description=Lac — tick AI refresher every hour (policy decides if it generates)
 
 [Timer]
-OnCalendar=*-*-* 07:00:00
-RandomizedDelaySec=5min
+# Toutes les heures à xx:55. Le script lit ai_policy et décide lui-même.
+OnCalendar=*-*-* *:55:00
+RandomizedDelaySec=2min
 Persistent=true
 Unit=lac-ai.service
 

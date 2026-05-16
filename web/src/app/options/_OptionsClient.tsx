@@ -302,7 +302,7 @@ export default function OptionsClient({
           </summary>
           <div className="text-xs text-slate-600 dark:text-slate-400 mt-2 leading-relaxed space-y-2">
             <p>
-              <strong>Il y a deux phrases IA distinctes</strong>, générées par GPT-4o une fois par jour (à 07:00 heure de Paris) :
+              <strong>Il y a deux phrases IA distinctes</strong>, générées par GPT-4o selon une cadence configurable (voir plus bas) :
             </p>
             <ol className="list-decimal ml-5 space-y-1">
               <li>
@@ -318,10 +318,25 @@ export default function OptionsClient({
             </ol>
             <p>
               Les deux phrases sont <strong>stockées en base de données</strong>{" "}et servies statiquement à chaque visite (pas d&apos;appel à OpenAI à chaque page load).
-              Conséquence : la phrase reste identique toute la journée. Elle se rafraîchit le lendemain matin.
+              Conséquence : la phrase reste identique entre 2 générations.
+            </p>
+            <p>
+              <strong>La cadence est réglable depuis le panel admin</strong>{" "}(section « 🤖 Phrases IA »). On définit :
+            </p>
+            <ul className="list-disc ml-5 space-y-0.5">
+              <li>les <strong>mois de haute saison</strong> (défaut : mai → août) ;</li>
+              <li>les <strong>heures de génération en haute saison</strong> (défaut : 06h, 10h, 14h, 18h — soit 4×/jour) ;</li>
+              <li>les <strong>heures de génération en basse saison</strong> (défaut : 07h — soit 1×/jour) ;</li>
+              <li>un <strong>kill switch global</strong> pour tout désactiver (économie API, ou phrase obsolète qui ne sert à rien en hiver) ;</li>
+              <li>un bouton <strong>« Régénérer maintenant »</strong> qui force une génération immédiate sans attendre le prochain créneau.</li>
+            </ul>
+            <p>
+              <strong>Toutes les heures sont en heure de Paris</strong>{" "}(géré automatiquement, été comme hiver).
+              Concrètement : le worker tourne <em>toutes les heures à xx:55</em>{" "}et regarde la policy pour décider s&apos;il génère ou s&apos;il skip.
             </p>
             <p>
               <strong>Pas de phrase IA = phrase trop ancienne ou jamais générée.</strong>{" "}Vérifier l&apos;état dans la section "Monitoring" plus haut.
+              En cas d&apos;échec de génération (panne OpenAI, etc.), un{" "}<strong>petit point rouge ⚠️</strong>{" "}apparaît sur l&apos;icône ⚙️ du bas d&apos;écran.
             </p>
           </div>
         </details>

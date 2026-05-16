@@ -136,6 +136,113 @@ export function deleteThreshold(id: number): void {
   ).run(id);
 }
 
+// --- AI policy --------------------------------------------------------------
+//
+// Singleton row (id=1) qui pilote la cadence de génération des phrases IA.
+// Auto-bootstrap idempotent : si la table ou la ligne manquent (DB ancienne),
+// on les crée à la volée pour ne pas dépendre du worker.
+
+export type AiPolicy = {
+  enabled: boolean;
+  high_season_months: string;
+  high_season_hours: string;
+  low_season_hours: string;
+  last_run_at: string | null;
+  last_run_status: "ok" | "failed" | null;
+  last_error: string | null;
+  updated_at: string;
+};
+
+function ensureAiPolicy(): void {
+  const db = getDb();
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS ai_policy (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      enabled INTEGER NOT NULL DEFAULT 1,
+      high_season_months TEXT NOT NULL DEFAULT '5,6,7,8',
+      high_season_hours TEXT NOT NULL DEFAULT '6,10,14,18',
+      low_season_hours TEXT NOT NULL DEFAULT '7',
+      last_run_at DATETIME,
+      last_run_status TEXT,
+      last_error TEXT,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  db.prepare(
+    `INSERT OR IGNORE INTO ai_policy (id, enabled, high_season_months, high_season_hours, low_season_hours)
+     VALUES (1, 1, '5,6,7,8', '6,10,14,18', '7')`
+  ).run();
+}
+
+export function getAiPolicy(): AiPolicy {
+  ensureAiPolicy();
+  const db = getDb();
+  const row = db
+    .prepare(
+      `SELECT enabled, high_season_months, high_season_hours, low_season_hours,
+              last_run_at, last_run_status, last_error, updated_at
+       FROM ai_policy WHERE id = 1`
+    )
+    .get() as {
+    enabled: number;
+    high_season_months: string;
+    high_season_hours: string;
+    low_season_hours: string;
+    last_run_at: string | null;
+    last_run_status: string | null;
+    last_error: string | null;
+    updated_at: string;
+  };
+  return {
+    enabled: row.enabled === 1,
+    high_season_months: row.high_season_months,
+    high_season_hours: row.high_season_hours,
+    low_season_hours: row.low_season_hours,
+    last_run_at: row.last_run_at,
+    last_run_status: (row.last_run_status as "ok" | "failed" | null) ?? null,
+    last_error: row.last_error,
+    updated_at: row.updated_at,
+  };
+}
+
+export function saveAiPolicy(p: {
+  enabled: boolean;
+  high_season_months: string;
+  high_season_hours: string;
+  low_season_hours: string;
+}): void {
+  ensureAiPolicy();
+  const db = getDb();
+  db.prepare(
+    `UPDATE ai_policy
+     SET enabled = @enabled,
+         high_season_months = @high_season_months,
+         high_season_hours = @high_season_hours,
+         low_season_hours = @low_season_hours,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = 1`
+  ).run({
+    enabled: p.enabled ? 1 : 0,
+    high_season_months: p.high_season_months,
+    high_season_hours: p.high_season_hours,
+    low_season_hours: p.low_season_hours,
+  });
+}
+
+export function getAiStatus(): { last_run_at: string | null; last_run_status: "ok" | "failed" | null } {
+  // Endpoint public léger (pas d'auth). Pas d'erreur si DB neuve.
+  ensureAiPolicy();
+  const db = getDb();
+  const row = db
+    .prepare(`SELECT last_run_at, last_run_status FROM ai_policy WHERE id = 1`)
+    .get() as { last_run_at: string | null; last_run_status: string | null } | undefined;
+  if (!row) return { last_run_at: null, last_run_status: null };
+  return {
+    last_run_at: row.last_run_at,
+    last_run_status: (row.last_run_status as "ok" | "failed" | null) ?? null,
+  };
+}
+
 export function getLatestAICommentary(kind: "tendance" | "comparaison_annuelle"): string | null {
   const db = getDb();
   const row = db

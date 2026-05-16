@@ -43,11 +43,18 @@ Stockage : **un seul fichier SQLite** (`/var/lib/lac/niveau_eau.db`) partagé en
 │ prompt_tokens (INT)        │    └────────────────────────────┘
 │ completion_tokens (INT)    │
 │ total_tokens (INT)         │
-│ created_at                 │
-│ type (TEXT)                │    NOTE: pas de FK entre les tables.
-│   = 'tendance' OU          │    SQLite est lâche sur les contraintes,
-│     'comparaison_annuelle' │    et le métier ne le justifie pas.
-└────────────────────────────┘
+│ created_at                 │    ┌────────────────────────────┐
+│ type (TEXT)                │    │ ai_policy (singleton id=1) │
+│   = 'tendance' OU          │    │────────────────────────────│
+│     'comparaison_annuelle' │    │ enabled (0/1)              │
+└────────────────────────────┘    │ high_season_months (CSV)   │
+                                  │ high_season_hours (CSV)    │
+NOTE: pas de FK entre les tables. │ low_season_hours (CSV)     │
+SQLite est lâche sur les          │ last_run_at (UTC)          │
+contraintes, et le métier ne le   │ last_run_status            │
+justifie pas.                     │ last_error                 │
+                                  │ updated_at                 │
+                                  └────────────────────────────┘
 ```
 
 ---
@@ -141,6 +148,38 @@ WHERE date NOT IN (SELECT date_event FROM water_level)
 ```
 
 > **Avant V2** : c'était un fichier `ignore_dates.yaml` mis à jour à la main. Insupportable à long terme. La table `empty_days` rend ça automatique et observable (`SELECT * FROM empty_days` = liste exhaustive des jours blancs).
+
+### `ai_policy` — cadence de génération des phrases IA (V2.1)
+
+Singleton (toujours exactement 1 ligne, `id = 1`) qui pilote :
+
+- l'activation globale du worker IA ;
+- les mois et heures de "haute saison" (cadence accrue, défaut mai-août, 4×/jour) ;
+- les heures de "basse saison" (défaut 1×/jour) ;
+- le résultat du dernier run (utilisé par le badge ⚠️ dans le bottom nav).
+
+```sql
+CREATE TABLE ai_policy (
+    id                  INTEGER PRIMARY KEY CHECK (id = 1),
+    enabled             INTEGER NOT NULL DEFAULT 1,
+    high_season_months  TEXT NOT NULL DEFAULT '5,6,7,8',
+    high_season_hours   TEXT NOT NULL DEFAULT '6,10,14,18',
+    low_season_hours    TEXT NOT NULL DEFAULT '7',
+    last_run_at         DATETIME,                           -- UTC (CURRENT_TIMESTAMP)
+    last_run_status     TEXT,                               -- 'ok' | 'failed' | NULL
+    last_error          TEXT,
+    updated_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+**Fuseau horaire** :
+- Les heures cochées (`high_season_hours`, `low_season_hours`) sont des **heures de Paris**.
+- `last_run_at` est en **UTC** (cohérence avec les autres tables qui utilisent `CURRENT_TIMESTAMP`).
+- La conversion UTC↔Paris est faite dans `worker/policy.py` via `zoneinfo.ZoneInfo("Europe/Paris")`.
+
+**Auto-bootstrap** : la table + la ligne sont créées idempotemment par `worker/db.py::init_db()` ET par `web/lib/db.ts::ensureAiPolicy()`. Le frontend ne dépend donc pas du worker pour démarrer.
+
+**Edit via** : `/admin` (section « 🤖 Phrases IA ») → routes `GET/POST /api/admin/ai/policy`. Le worker tourne en cron horaire (`xx:55`) et appelle `should_generate_now()` à chaque tick (cf [03-worker-python.md](03-worker-python.md)).
 
 ---
 

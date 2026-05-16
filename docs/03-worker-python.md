@@ -19,6 +19,7 @@ worker/
     ├── scraper.py         ← Orchestration ingestion
     ├── kpi.py             ← Calculs métier (deltas, comparaison annuelle)
     ├── ai.py              ← Prompts + appel OpenAI
+    ├── policy.py          ← Décide si on doit générer (saison/heure/anti-doublon)
     ├── migrate.py         ← Migration V1 → V2 (one-shot)
     └── cli.py             ← Entrypoints des 3 console scripts
 ```
@@ -28,7 +29,7 @@ worker/
 | Commande | Module | Quand lancée |
 |---|---|---|
 | `lac-scraper` | `cli:scraper_main` | systemd timer toutes les 20 min |
-| `lac-ai-refresher` | `cli:ai_refresher_main` | systemd timer chaque jour à 07:00 |
+| `lac-ai-refresh` | `cli:ai_refresher_main` | systemd timer toutes les heures (xx:55) — la policy décide |
 | `lac-migrate` | `cli:migrate_main` | manuel, une seule fois au déploiement |
 
 ---
@@ -210,7 +211,7 @@ Compare le niveau actuel à celui des 3 dernières années à la même date.
 
 ## Module `ai.py`
 
-Génération de la phrase IA via GPT-4o, **1× par jour à 07:00** (lancé par `lac-ai.timer`).
+Génération des phrases IA via GPT-4o. Le timer systemd tape **toutes les heures à xx:55** ; `cli.ai_refresher_main` lit la table `ai_policy` et le module [`policy.py`](#module-policypy) décide si on génère ou si on skip.
 
 ### Prompts
 
@@ -239,7 +240,58 @@ Workflow complet :
 4. `compute_annual_comparison()`
 5. Construit et envoie le prompt "comparaison_annuelle" → log + return
 
-**Coût** : ~600 tokens in + ~120 tokens out par appel × 2 appels = ~0,003€/jour à GPT-4o, soit **~0,10€/mois**.
+**Coût** : ~600 tokens in + ~120 tokens out par appel × 2 appels = ~0,003€ par génération. Avec la cadence par défaut (4×/jour mai-août, 1×/jour reste de l'année) ≈ ~750 générations/an, soit **~2,3€/an** ou **~0,20€/mois**.
+
+---
+
+## Module `policy.py`
+
+Logique de décision pure (pas de DB ni d'I/O), facile à tester. Le timer systemd appelle `cli.ai_refresher_main` toutes les heures ; ce dernier consulte la policy via :
+
+```python
+def should_generate_now(
+    now_paris_naive: datetime,
+    policy: dict,
+    last_run_at_utc: datetime | None,
+) -> tuple[bool, str]:
+    if not policy.get("enabled"):
+        return False, "disabled"
+
+    if is_high_season(now_paris_naive, policy):
+        allowed = _parse_csv_ints(policy["high_season_hours"])
+        bucket = "high_season"
+    else:
+        allowed = _parse_csv_ints(policy["low_season_hours"])
+        bucket = "low_season"
+
+    if now_paris_naive.hour not in allowed:
+        return False, f"{bucket}_off_hour"
+
+    if last_run_at_utc is not None:
+        last_paris = _utc_to_paris(last_run_at_utc)
+        if now_paris_naive - last_paris < timedelta(minutes=MIN_GAP_MINUTES):
+            return False, "too_recent"
+
+    return True, bucket
+```
+
+### Fuseaux horaires (CRITIQUE)
+
+- `now_paris_naive` est obtenu via `now_paris()` (utilise `zoneinfo.ZoneInfo("Europe/Paris")`).
+- `last_run_at_utc` est lu depuis `ai_policy.last_run_at` (écrit par SQLite `CURRENT_TIMESTAMP`, donc UTC).
+- La fonction convertit explicitement UTC→Paris avant le calcul de delta, sinon en été (UTC+2) on aurait un décalage permanent de 2h sur l'anti-doublon.
+
+### Anti-doublon
+
+`MIN_GAP_MINUTES = 50` : on ne régénère pas si la dernière génération réussie est plus récente que 50 min. Sécurise contre les ticks décalés du timer (`RandomizedDelaySec=2min`) et contre un `--force` suivi d'un tick naturel.
+
+### `--force`
+
+Le flag CLI `lac-ai-refresh --force` bypass la policy entière (utilisé par le bouton « Régénérer maintenant » du panel admin). Le résultat est tout de même écrit dans `last_run_at/status`, donc visible dans le UI.
+
+### Tests
+
+`worker/tests/test_policy.py` couvre 18 cas dont les transitions DST été/hiver (tests `test_dst_summer_no_anti_doublon_glitch` et `test_dst_winter_no_anti_doublon_glitch`).
 
 ---
 
@@ -286,11 +338,29 @@ def scraper_main() -> int:
 
 def ai_refresher_main() -> int:
     _configure_logging()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--force", action="store_true")
+    args = parser.parse_args()
+
     settings = get_settings()
     init_db(settings.db_path)
-    client = OpenAI(api_key=settings.openai_api_key)
-    result = run_ai_refresher(client=client, db_path=settings.db_path)
-    return 0
+    policy = get_ai_policy(settings.db_path)
+
+    if not args.force:
+        last_run = parse_db_datetime(policy.get("last_run_at"))
+        ok, reason = should_generate_now(now_paris(), policy, last_run)
+        if not ok:
+            log.info("ai_refresher skipped: %s", reason)
+            return 0
+
+    try:
+        client = OpenAI(api_key=settings.openai_api_key)
+        result = run_ai_refresher(client=client, db_path=settings.db_path)
+        mark_ai_run(settings.db_path, status="ok")
+        return 0
+    except Exception as exc:
+        mark_ai_run(settings.db_path, status="failed", error=f"{type(exc).__name__}: {exc}")
+        return 1
 
 def migrate_main() -> int:
     _configure_logging()

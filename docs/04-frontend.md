@@ -35,7 +35,7 @@ web/
 │   │   ├── options/
 │   │   │   ├── page.tsx          ← /options (émoji ⚙️)
 │   │   │   └── _OptionsClient.tsx
-│   │   └── api/                  ← 9 route handlers
+│   │   └── api/                  ← 12 route handlers
 │   │       ├── water/recent/route.ts
 │   │       ├── water/yearly/route.ts
 │   │       ├── water/full/route.ts
@@ -123,7 +123,17 @@ Cette page contient **deux sections** dans cet ordre :
 
 ### `/admin` (protégée par mot de passe)
 
-Bloc explicatif "À quoi servent les seuils ?" en tête (explique les 2 usages : graphs + prompt GPT), puis CRUD complet des seuils.
+2 sections :
+
+1. **🤖 Phrases IA** (V2.1) — pilotage de la cadence de génération via la table `ai_policy` :
+   - Toggle activé/désactivé (kill switch global).
+   - 12 checkboxes pour les **mois de haute saison** (défaut : mai → août).
+   - 24 checkboxes (× 2 lignes) pour les **heures de génération** : haute saison (par défaut 06h/10h/14h/18h, en bleu) et basse saison (par défaut 07h, en gris).
+   - Bouton **« 🔄 Régénérer maintenant »** (rate-limit 1×/5 min côté serveur, spawn `uv run lac-ai-refresh --force` en sous-process détaché).
+   - Statut de la dernière génération : `✓ ok / ⚠️ erreur / —` + date relative + message d'erreur en rouge si fail.
+   - Toutes les heures sont en **heure de Paris** (le worker convertit UTC↔Paris automatiquement).
+
+2. **📍 Seuils** — bloc explicatif "À quoi servent les seuils ?" (2 usages : graphs + prompt GPT) puis CRUD complet des seuils.
 
 ### `/options` — émoji ⚙️
 
@@ -153,7 +163,7 @@ Page client (`_OptionsClient.tsx`) avec 4 sections :
 | Composant | Type | Rôle |
 |---|---|---|
 | `AppShell` | Server | Header sticky "💧 Saints Peyres" + indicateur "Mis à jour il y a N min" + bottom nav |
-| `BottomNav` | Client | Barre nav iOS-style fixe en bas, **3 émojis seuls** (💧 / 📈 / ⚙️), opacité réduite quand inactif |
+| `BottomNav` | Client | Barre nav iOS-style fixe en bas, **3 émojis seuls** (💧 / 📈 / ⚙️), opacité réduite quand inactif. **Badge rouge ⚠️** sur ⚙️ si `last_run_status='failed'` (poll `/api/ai/status` toutes les 5 min). |
 | `AIBanner` | Server | Carte bleue avec ✨ + phrase IA (ou fallback "Pas de commentaire disponible") |
 | `LevelHero` | Server | Bloc d'en-tête de la page Now : gros niveau actuel + date/heure de la dernière mesure (alignés) |
 | `KpiGrid` | Server | Grille 2×2 des deltas (Tendance 7 j, VS hier, VS 3 j, VS sem.) — pas de "niveau actuel" ni "dernier relevé" (ils sont dans `<LevelHero>`) |
@@ -212,6 +222,7 @@ GET /api/water/recent?days=N        → mesures détaillées (datetime + value) 
 GET /api/water/yearly?years=2025,…  → 1 mesure/jour par année (la première du jour)
 GET /api/water/full                 → 1 mesure/jour depuis 2021-07-07
 GET /api/ai/commentary?kind=…       → dernière phrase IA (tendance | comparaison_annuelle)
+GET /api/ai/status                  → { last_run_at, last_run_status } — consommé par BottomNav (badge ⚠️)
 GET /api/thresholds                 → liste des seuils actifs
 GET /api/health                     → { status, last_measure_age_min, db_size_mb }
 ```
@@ -224,6 +235,9 @@ GET /api/health                     → { status, last_measure_age_min, db_size_
 POST   /api/thresholds              → créer un seuil
 PUT    /api/thresholds/:id          → modifier
 DELETE /api/thresholds/:id          → soft delete
+GET    /api/admin/ai/policy         → lire la policy de cadence IA
+POST   /api/admin/ai/policy         → mettre à jour (validation Zod : mois 1..12, heures 0..23)
+POST   /api/admin/ai/regenerate     → spawn `lac-ai-refresh --force` (rate-limit 1×/5min)
 POST   /api/auth/login              → cookie de session signée
 POST   /api/auth/logout             → vide le cookie
 ```

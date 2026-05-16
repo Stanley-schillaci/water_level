@@ -28,7 +28,23 @@ Une seule session de travail (~6h) :
 
 ### Mai 2026+ — V2 en prod
 
-URL : `https://vps-9bc559d8.vps.ovh.net/`. Streamlit Cloud reste up en backup. Cutover définitif prévu à J+30 si tout est stable.
+URL principale : `https://gothis.duckdns.org/` (DuckDNS, gratuit, mémorisable). `https://vps-9bc559d8.vps.ovh.net/` reste actif en filet de sécurité. Streamlit Cloud reste up en backup. Cutover définitif prévu à J+30 si tout est stable.
+
+### 2026-05-16 — V2.1 : cadence IA configurable
+
+Itération sur la feature IA :
+- Ajout d'une **table `ai_policy`** (singleton) qui pilote la fréquence de génération.
+- Le worker `lac-ai-refresh` passe d'un cron quotidien (`07:00`) à un cron horaire (`xx:55`) qui consulte la policy pour décider à chaque tick.
+- Nouveau module `worker/policy.py` avec `should_generate_now()` + tests DST été/hiver.
+- Nouvelle section « 🤖 Phrases IA » dans le panel admin (toggle, mois/heures, bouton « Régénérer maintenant »).
+- Badge ⚠️ rouge sur l'onglet ⚙️ du bottom nav si la dernière génération a échoué (poll `/api/ai/status` toutes les 5 min).
+- Fuseau Paris explicite partout (zoneinfo) pour ne pas se faire avoir par le mix SQLite UTC ↔ heure locale.
+
+**Pourquoi maintenant ?** L'utilité de l'IA n'est pas la même selon la saison :
+- Mai → août (saison nautique) : papa veut des recommandations fraîches plusieurs fois par jour
+- Reste de l'année : 1×/jour suffit largement, voire on peut désactiver complètement
+
+Avant V2.1, changer ça impliquait un redéploiement. Maintenant : 3 clics depuis l'iPhone.
 
 ---
 

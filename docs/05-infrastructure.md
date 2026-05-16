@@ -109,7 +109,7 @@ Et `systemctl reload caddy`. Caddy demande le cert tout seul.
 | `lac-scraper.service` | service (oneshot) | déclenché par le timer |
 | `lac-scraper.timer` | timer | toutes les 20 min |
 | `lac-ai.service` | service (oneshot) | déclenché par le timer |
-| `lac-ai.timer` | timer | chaque jour à 07:00 |
+| `lac-ai.timer` | timer | toutes les heures (xx:55) — la policy décide si on génère |
 | `lac-backup.service` | service (oneshot) | déclenché par le timer |
 | `lac-backup.timer` | timer | chaque jour à 02:05 |
 
@@ -192,10 +192,18 @@ WantedBy=timers.target
 ### `lac-ai.service` + `.timer`
 
 Pareil que scraper mais :
-- `ExecStart=lac-ai-refresher` au lieu de `lac-scraper`
-- `Timer: OnCalendar=*-*-* 07:00:00` (chaque jour à 07:00 heure locale Paris)
+- `ExecStart=lac-ai-refresh` (au lieu de `lac-scraper`)
+- `Timer: OnCalendar=*-*-* *:55:00` (toutes les heures à xx:55, heure locale Paris)
+- `RandomizedDelaySec=2min` pour éviter de cogner OpenAI exactement à xx:55
 
-**Pourquoi 07:00 ?** Papa consulte le matin → il a la phrase fraîche au saut du lit.
+**Pourquoi toutes les heures ?** Le script ne génère pas systématiquement : il consulte la table `ai_policy` et le module `worker/policy.py` pour décider, selon le mois et l'heure courants en heure de Paris. Cela permet à l'admin de régler la cadence depuis le panel web (cf [04-frontend.md](04-frontend.md)) sans toucher au timer systemd.
+
+**Cadence par défaut** :
+- Haute saison (mai → août) : 4×/jour à 06h, 10h, 14h, 18h
+- Basse saison (reste de l'année) : 1×/jour à 07h
+- Kill switch global (`enabled=0`) pour tout désactiver
+
+**`--force`** : le bouton "Régénérer maintenant" du panel admin spawn `lac-ai-refresh --force` qui bypass la policy. Rate-limité 1×/5 min côté API Next.js.
 
 ### `lac-backup.service` + `.timer`
 
@@ -294,8 +302,11 @@ timedatectl set-timezone Europe/Paris
 
 Important pour :
 - L'affichage des dates dans l'UI ("Mis à jour il y a N min")
-- L'heure du timer `lac-ai.timer` (07:00 heure de Paris, pas UTC)
+- L'heure des timers (`lac-ai.timer` à xx:55, `lac-backup.timer` à 02:05 — tous en heure de Paris)
+- Les heures cochées dans `ai_policy` (interprétées en heure de Paris par `worker/policy.py` via `zoneinfo`)
 - Les logs systemd (`journalctl` affiche en heure locale)
+
+**SQLite et UTC** : `CURRENT_TIMESTAMP` écrit en UTC quel que soit le timezone système. Toute logique qui mélange `CURRENT_TIMESTAMP` avec `datetime.now()` doit faire la conversion explicite (cf `worker/policy.py::_utc_to_paris`).
 
 ---
 
