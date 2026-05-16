@@ -74,7 +74,12 @@ export default function WaterChart({
               symbol: "none",
               silent: true,
               lineStyle: { type: "dashed" as const },
-              data: thresholds.map((t) => ({
+              // Anti-chevauchement des labels : on alterne gauche/droite
+              // selon l'index, et on ajoute un background semi-opaque pour
+              // que le texte reste lisible même quand la courbe passe dessous.
+              // Sur mobile le chart est étroit donc 2 labels à la même
+              // verticale finissent superposés ; alterner double la place.
+              data: thresholds.map((t, idx) => ({
                 yAxis: convertOrSelf(t.value),
                 lineStyle: {
                   color: t.color,
@@ -84,15 +89,30 @@ export default function WaterChart({
                 label: {
                   formatter: t.name,
                   color: t.color,
-                  position: "insideEndTop" as const,
-                  fontSize: 10,
+                  position: (idx % 2 === 0
+                    ? "insideStartTop"
+                    : "insideEndTop") as "insideStartTop" | "insideEndTop",
+                  fontSize: 9,
+                  padding: [2, 4, 2, 4],
+                  backgroundColor: "rgba(255,255,255,0.85)",
+                  borderRadius: 3,
                 },
               })),
             }
           : undefined,
     }));
+    // Top et bottom du grid sont calculés pour ménager :
+    // - en haut : la légende multi-lignes (1 par année) qui prend ~24px
+    //   par rangée. ECharts wrap automatiquement → on alloue ~52px.
+    // - en bas : les labels d'axe X et le scroll des dataZoom inline.
+    const hasLegend = lines.length > 1;
     return {
-      grid: { left: 40, right: 12, top: 16, bottom: 24 },
+      grid: {
+        left: 40,
+        right: 12,
+        top: hasLegend ? 52 : 16,
+        bottom: 24,
+      },
       tooltip: {
         trigger: "axis",
         confine: true,
@@ -117,8 +137,18 @@ export default function WaterChart({
           formatter: (v: number) => v.toFixed(2),
         },
       },
-      legend:
-        lines.length > 1 ? { bottom: 0, type: "scroll" as const, itemHeight: 8 } : undefined,
+      // Légende en haut (et plus en bas) : sur mobile, la légende au bas
+      // recouvrait les labels d'axe X (années → illisible). En haut on
+      // garde un wrap natif quand il y a beaucoup d'entrées.
+      legend: hasLegend
+        ? {
+            top: 0,
+            type: "scroll" as const,
+            itemHeight: 8,
+            itemGap: 8,
+            textStyle: { fontSize: 10 },
+          }
+        : undefined,
       dataZoom: [{ type: "inside" as const }],
       series,
     };

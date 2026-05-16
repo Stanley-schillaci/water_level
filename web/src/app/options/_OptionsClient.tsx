@@ -16,11 +16,30 @@ function relativeAge(iso: string | null): string {
   if (!iso) return "—";
   const t = new Date(iso).getTime();
   const min = Math.max(0, Math.floor((Date.now() - t) / 60_000));
+  return formatMinutesAge(min);
+}
+
+/**
+ * Formate un nombre de minutes en "il y a X min / X h / X j".
+ * À préférer quand l'âge est calculé côté serveur (évite les pièges
+ * d'interprétation timezone des timestamps SQLite UTC vs local).
+ */
+function formatMinutesAge(min: number | null): string {
+  if (min === null) return "—";
+  if (min < 1) return "à l'instant";
   if (min < 60) return `il y a ${min} min`;
   const h = Math.floor(min / 60);
   if (h < 24) return `il y a ${h} h`;
-  const d = Math.floor(h / 24);
+  const d = Math.floor(min / 1440);
   return `il y a ${d} j`;
+}
+
+function ageStatusFromMinutes(
+  min: number | null,
+  maxMinOk: number,
+): "ok" | "stale" | "missing" {
+  if (min === null) return "missing";
+  return min <= maxMinOk ? "ok" : "stale";
 }
 
 function formatFr(iso: string | null): string {
@@ -69,13 +88,13 @@ function applyTheme(pref: ThemePref) {
 
 export default function OptionsClient({
   lastMeasureAt,
-  lastTendanceAt,
+  lastTendanceAgeMinutes,
   hasLastTendance,
   dbSizeMb,
   totalMeasures,
 }: {
   lastMeasureAt: string | null;
-  lastTendanceAt: string | null;
+  lastTendanceAgeMinutes: number | null;
   hasLastTendance: boolean;
   dbSizeMb: number | null;
   totalMeasures: number;
@@ -380,8 +399,14 @@ export default function OptionsClient({
           <li className="flex items-center justify-between">
             <span className="text-slate-600 dark:text-slate-400">Dernière phrase IA</span>
             <span className="font-medium">
-              <StatusDot status={!hasLastTendance ? "missing" : ageStatus(lastTendanceAt, 36 * 60)} />
-              <span className="text-slate-500 text-xs">{relativeAge(lastTendanceAt)}</span>
+              <StatusDot
+                status={
+                  !hasLastTendance
+                    ? "missing"
+                    : ageStatusFromMinutes(lastTendanceAgeMinutes, 36 * 60)
+                }
+              />
+              <span className="text-slate-500 text-xs">{formatMinutesAge(lastTendanceAgeMinutes)}</span>
             </span>
           </li>
           <li className="flex items-center justify-between">

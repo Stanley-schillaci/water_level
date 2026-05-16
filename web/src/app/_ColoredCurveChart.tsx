@@ -146,7 +146,7 @@ export default function ColoredCurveChart({
               symbol: "none",
               silent: true,
               lineStyle: { type: "dashed" as const },
-              data: thresholds.map((t) => ({
+              data: thresholds.map((t, idx) => ({
                 yAxis: convertOrSelf(t.value),
                 lineStyle: {
                   color: t.color,
@@ -156,8 +156,13 @@ export default function ColoredCurveChart({
                 label: {
                   formatter: t.name,
                   color: t.color,
-                  position: "insideEndTop" as const,
-                  fontSize: 10,
+                  position: (idx % 2 === 0
+                    ? "insideStartTop"
+                    : "insideEndTop") as "insideStartTop" | "insideEndTop",
+                  fontSize: 9,
+                  padding: [2, 4, 2, 4],
+                  backgroundColor: "rgba(255,255,255,0.85)",
+                  borderRadius: 3,
                 },
               })),
             }

@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import {
   ALL_MODES,
@@ -38,12 +39,22 @@ export function DisplayProvider({ children }: { children: React.ReactNode }) {
   });
   const [ready, setReady] = useState(false);
 
+  const pathname = usePathname();
+
   // 1. Au mount : lire le mode stocké
   useEffect(() => {
     setModeState(readStoredMode());
   }, []);
 
-  // 2. Fetch les références (calibration + min historique)
+  // 2. Fetch les références à chaque navigation.
+  //
+  // Pourquoi pas juste au mount : le DisplayProvider est branché au layout
+  // racine, donc il ne se re-mount jamais. Si l'admin modifie la calibration
+  // d'un ponton (ou range l'amovible), les Client Components qui consomment
+  // `refs` continueraient à voir l'ancienne valeur tant que l'utilisateur
+  // ne ferait pas un hard reload. En refetch sur changement de pathname,
+  // un simple aller-retour /admin → / suffit pour récupérer les bonnes refs.
+  // Coût : 1 fetch léger /api/display/settings par navigation. OK.
   useEffect(() => {
     let cancelled = false;
     fetch("/api/display/settings")
@@ -69,7 +80,7 @@ export function DisplayProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [pathname]);
 
   const setMode = useCallback((m: DisplayMode) => {
     setModeState(m);
