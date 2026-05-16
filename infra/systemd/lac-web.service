@@ -11,6 +11,11 @@ EnvironmentFile=/opt/lac/web/.env.production
 Environment=NODE_ENV=production
 Environment=PORT=3000
 Environment=LAC_DB_PATH=/var/lib/lac/niveau_eau.db
+# Pour que /api/admin/ai/regenerate puisse spawn `uv run lac-ai-refresher --force`
+# (le symlink /usr/local/bin/uv pointe vers /home/app/.local/bin/uv, donc on doit
+# garder /home accessible en lecture, et fournir UV_CACHE_DIR sur un chemin RW).
+Environment=UV_CACHE_DIR=/var/lib/lac/.uv-cache
+Environment=LAC_WORKER_DIR=/opt/lac/worker
 ExecStart=/usr/bin/npm start
 Restart=on-failure
 RestartSec=5
@@ -19,7 +24,7 @@ StandardError=journal
 
 # Hardening
 ProtectSystem=full
-ProtectHome=true
+ProtectHome=read-only
 NoNewPrivileges=true
 ReadWritePaths=/var/lib/lac
 
