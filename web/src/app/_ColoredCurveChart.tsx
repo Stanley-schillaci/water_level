@@ -23,6 +23,23 @@ type Props = {
 };
 
 /**
+ * Format un Date en string "YYYY-MM-DD HH:MM:SS" en heure LOCALE
+ * (par opposition à `toISOString()` qui formate en UTC).
+ *
+ * Indispensable ici : les `datetime_event` venant de l'API sont stockés
+ * en heure locale Paris sans suffixe Z. Si on les reformat via `toISOString`,
+ * on les transforme silencieusement en UTC string (sans Z) et ECharts les
+ * re-parse comme local → décalage de 2h en été (CEST = UTC+2).
+ */
+function formatLocalDateTime(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return (
+    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
+    ` ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+  );
+}
+
+/**
  * Regroupe les mesures par "buckets" de `hours` heures et prend la moyenne.
  * Évite la sur-segmentation quand on a 144 mesures/jour.
  */
@@ -42,7 +59,9 @@ function resampleHourly(measures: Measure[], hours: number): Measure[] {
   return Array.from(buckets.entries())
     .sort(([a], [b]) => a - b)
     .map(([bucketTime, b]) => ({
-      datetime_event: new Date(bucketTime).toISOString().replace("T", " ").slice(0, 19),
+      // formatLocalDateTime() pour ne PAS introduire de décalage horaire
+      // (cf. commentaire de la fonction).
+      datetime_event: formatLocalDateTime(new Date(bucketTime)),
       value: b.sum / b.count,
     }));
 }
