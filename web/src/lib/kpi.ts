@@ -15,6 +15,41 @@ export type AnnualKpis = {
   vsY3: number | null;
 };
 
+/**
+ * Bilan "apport vs soutirage" sur une fenêtre de mesures.
+ *
+ * On somme tous les deltas positifs entre points consécutifs (= apport
+ * naturel : pluie, fonte, sources) et tous les deltas négatifs (= soutirage
+ * = EDF qui turbine + évaporation + fuites barrage ; on ne peut pas les
+ * séparer sans données externes).
+ *
+ * - `gained` : somme des hausses, toujours ≥ 0
+ * - `lost`   : somme des baisses, toujours ≥ 0 (valeur absolue)
+ * - `net`    : valeur(fin) − valeur(début) = gained − lost
+ *
+ * Toutes les valeurs en mètres mNGF, donc le bilan est INDÉPENDANT du
+ * référentiel d'affichage (le delta entre 2 mesures est invariant par
+ * translation).
+ */
+export type FlowSummary = {
+  gained: number;
+  lost: number;
+  net: number;
+};
+
+export function computeFlowSummary(measures: { value: number }[]): FlowSummary {
+  if (measures.length < 2) return { gained: 0, lost: 0, net: 0 };
+  let gained = 0;
+  let lost = 0;
+  for (let i = 1; i < measures.length; i++) {
+    const delta = measures[i].value - measures[i - 1].value;
+    if (delta > 0) gained += delta;
+    else if (delta < 0) lost += -delta;
+  }
+  const net = measures[measures.length - 1].value - measures[0].value;
+  return { gained, lost, net };
+}
+
 function valueAtOrBefore(measures: Measure[], target: Date): number | null {
   let best: Measure | null = null;
   for (const m of measures) {

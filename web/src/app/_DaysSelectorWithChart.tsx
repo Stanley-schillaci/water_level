@@ -2,8 +2,10 @@
 
 import ColoredCurveChart from "./_ColoredCurveChart";
 import DaysSelector from "@/components/DaysSelector";
+import FlowSummary from "@/components/FlowSummary";
 import { type ChartThreshold } from "@/components/WaterChart";
-import { useEffect, useState } from "react";
+import { computeFlowSummary } from "@/lib/kpi";
+import { useEffect, useMemo, useState } from "react";
 
 type Measure = { datetime_event: string; value: number };
 
@@ -76,6 +78,10 @@ export default function DaysSelectorWithChart({
     return () => controller.abort();
   }, [days]);
 
+  // Bilan apporté/soutiré/net sur la fenêtre courante. Recalculé quand
+  // measures change. Pas affiché tant qu'on n'a pas au moins 2 points.
+  const flow = useMemo(() => computeFlowSummary(measures), [measures]);
+
   return (
     <>
       <DaysSelector value={days} onChange={setDays} />
@@ -87,6 +93,7 @@ export default function DaysSelectorWithChart({
         height={300}
       />
       {loading && <p className="text-xs text-slate-500 mt-2">Chargement…</p>}
+      {measures.length >= 2 && <FlowSummary flow={flow} days={days} />}
     </>
   );
 }
