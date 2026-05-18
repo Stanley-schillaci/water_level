@@ -7,15 +7,11 @@ import { useEffect, useState } from "react";
 
 type Measure = { datetime_event: string; value: number };
 
-const VALID_DAYS = [1, 3, 7, 14, 30, 60, 90, 180, 365] as const;
+// Toujours démarrer sur 1j à chaque ouverture (pas de persistance).
+// Volontairement pas de localStorage : ça créait un flicker visible entre
+// 1j (SSR) et la dernière valeur stockée (client), avec un risque
+// d'incohérence si l'utilisateur tape sur un bouton pendant la transition.
 const DEFAULT_DAYS = 1;
-const STORAGE_KEY = "lac-days";
-
-function parseStoredDays(raw: string | null): number | null {
-  if (!raw) return null;
-  const n = Number.parseInt(raw, 10);
-  return (VALID_DAYS as readonly number[]).includes(n) ? n : null;
-}
 
 /**
  * Taille de bucket (en heures) pour le resampling, adaptée à la fenêtre :
@@ -56,25 +52,9 @@ export default function DaysSelectorWithChart({
 }: {
   thresholds: ChartThreshold[];
 }) {
-  // IMPORTANT — éviter le hydration mismatch React :
-  // on initialise TOUJOURS avec DEFAULT_DAYS côté state (server et premier
-  // render client identiques). Le localStorage est lu APRÈS le mount dans
-  // un useEffect. Sinon on aurait 2 DOMs différents (SSR=3 vs client=stored)
-  // qui se réconcilient mal — symptômes : 2 boutons surbrillés en même
-  // temps, clics fantômes pendant l'hydratation.
   const [days, setDays] = useState<number>(DEFAULT_DAYS);
-  const [hydrated, setHydrated] = useState(false);
   const [measures, setMeasures] = useState<Measure[]>([]);
   const [loading, setLoading] = useState(false);
-
-  // Au mount client : restaurer la dernière fenêtre choisie depuis localStorage.
-  useEffect(() => {
-    const stored = parseStoredDays(window.localStorage.getItem(STORAGE_KEY));
-    if (stored !== null && stored !== DEFAULT_DAYS) {
-      setDays(stored);
-    }
-    setHydrated(true);
-  }, []);
 
   // Fetch sur changement de days, AVEC annulation de la requête précédente.
   // Sans AbortController, un clic rapide 1j → 7j peut laisser la réponse 1j
@@ -95,14 +75,6 @@ export default function DaysSelectorWithChart({
       });
     return () => controller.abort();
   }, [days]);
-
-  // Persiste le choix seulement APRÈS hydratation. Sinon, au premier mount,
-  // on écraserait le localStorage existant avec DEFAULT_DAYS avant d'avoir
-  // pu le lire.
-  useEffect(() => {
-    if (!hydrated) return;
-    window.localStorage.setItem(STORAGE_KEY, String(days));
-  }, [days, hydrated]);
 
   return (
     <>
