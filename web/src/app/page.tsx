@@ -14,8 +14,12 @@ import DaysSelectorWithChart from "./_DaysSelectorWithChart";
 export const dynamic = "force-dynamic";
 
 export default async function NowPage() {
-  const measures7d = getRecentMeasures(7);
-  const kpis = computeKpis(measures7d);
+  // 8 jours et pas 7 : `computeKpis` cherche la mesure d'il y a 7 jours
+  // PAR RAPPORT À LA DERNIÈRE MESURE (target = lastDt - 7j). Avec une
+  // fenêtre de 7 jours pile, la mesure d'il y a 7j est juste hors fenêtre
+  // → vsS1 = null → "VS il y a une semaine" et "Tendance 7j" affichaient "—".
+  const measures8d = getRecentMeasures(8);
+  const kpis = computeKpis(measures8d);
   const banner = getLatestAICommentaryWithAge("tendance");
   const thresholds = getThresholds();
   const autoZero = getAutoZeroLine();
