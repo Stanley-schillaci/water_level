@@ -36,6 +36,7 @@ export function DisplayProvider({ children }: { children: React.ReactNode }) {
   const [refs, setRefs] = useState<LevelReferences>({
     ponton_calibration_mngf: null,
     min_historical: null,
+    max_historical: null,
   });
   const [ready, setReady] = useState(false);
 
@@ -101,7 +102,7 @@ export function useDisplay(): Ctx {
     // server-rendered qui n'auraient pas dû appeler le hook).
     return {
       mode: DEFAULT_MODE,
-      refs: { ponton_calibration_mngf: null, min_historical: null },
+      refs: { ponton_calibration_mngf: null, min_historical: null, max_historical: null },
       ready: false,
       setMode: () => {},
     };

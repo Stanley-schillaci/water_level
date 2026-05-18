@@ -2,7 +2,7 @@
 
 import type { Kpis } from "@/lib/kpi";
 import { useDisplay } from "@/components/DisplayProvider";
-import { convertValue, formatRelativeMeters, MODE_SHORT_LABELS } from "@/lib/levelDisplay";
+import { convertValue, formatDelta, formatRelativeMeters, MODE_SHORT_LABELS } from "@/lib/levelDisplay";
 
 /**
  * Bloc principal affiché en haut de la page Now :
@@ -60,6 +60,13 @@ export default function LevelHero({ kpis }: { kpis: Kpis }) {
   const secondary =
     mode === "mngf" ? null : `${kpis.level.toFixed(2)} mNGF`;
 
+  // Écart au max historique : typiquement négatif (on est sous le max), positif
+  // ne devrait jamais arriver sauf nouveau record. `formatDelta` fait le signe.
+  // Comme les deltas sont invariants par translation, on peut le calculer en
+  // mNGF brut sans se soucier du mode d'affichage.
+  const deltaToMax =
+    refs.max_historical !== null ? kpis.level - refs.max_historical.value : null;
+
   return (
     <section className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 mb-4">
       <div className="flex items-center justify-between gap-3">
@@ -75,6 +82,9 @@ export default function LevelHero({ kpis }: { kpis: Kpis }) {
         <div className="text-right text-xs text-slate-500 dark:text-slate-400 leading-snug">
           <div>{longDate} · {time}</div>
           <div className="mt-0.5 opacity-70">{ageLabel}</div>
+          {deltaToMax !== null && (
+            <div className="mt-1 opacity-70">{formatDelta(deltaToMax)} du max</div>
+          )}
           {secondary && <div className="mt-1 opacity-70">= {secondary}</div>}
         </div>
       </div>

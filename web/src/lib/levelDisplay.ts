@@ -15,6 +15,7 @@ export type DisplayMode = "mngf" | "ponton" | "min";
 export type LevelReferences = {
   ponton_calibration_mngf: number | null;
   min_historical: { value: number; date: string } | null;
+  max_historical: { value: number; date: string } | null;
 };
 
 export const ALL_MODES: DisplayMode[] = ["mngf", "ponton", "min"];

@@ -547,6 +547,7 @@ export type LevelReferences = {
   ponton_calibration_mngf: number | null;     // calibration courante du ponton actif
   active_ponton: "fixe" | "amovible" | null;
   min_historical: { value: number; date: string } | null;
+  max_historical: { value: number; date: string } | null;
 };
 
 export function getLevelReferences(): LevelReferences {
@@ -573,10 +574,14 @@ export function getLevelReferences(): LevelReferences {
   const min = db
     .prepare(`SELECT value, date_event FROM water_level ORDER BY value ASC LIMIT 1`)
     .get() as { value: number; date_event: string } | undefined;
+  const max = db
+    .prepare(`SELECT value, date_event FROM water_level ORDER BY value DESC LIMIT 1`)
+    .get() as { value: number; date_event: string } | undefined;
   return {
     ponton_calibration_mngf,
     active_ponton: active,
     min_historical: min ? { value: min.value, date: min.date_event } : null,
+    max_historical: max ? { value: max.value, date: max.date_event } : null,
   };
 }
 
