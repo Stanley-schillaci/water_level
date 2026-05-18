@@ -27,11 +27,19 @@ export type Threshold = {
 };
 
 export function getRecentMeasures(days: number): Measure[] {
+  // IMPORTANT : `datetime_event` est stocké en HEURE LOCALE Paris (parsé du
+  // HTML Laetis sans suffixe Z). `datetime('now')` SQLite retourne UTC.
+  // Comparer les deux directement décale de +2h en CEST (été) / +1h en CET
+  // (hiver) → la fenêtre "1j" contenait 26h de données au lieu de 24h.
+  //
+  // Fix : modifier `'localtime'` pour que SQLite convertisse `now` en heure
+  // locale du serveur. Le VPS prod et la machine de dev sont tous deux en
+  // Europe/Paris, donc cohérent.
   const db = getDb();
   return db
     .prepare(
       `SELECT datetime_event, value FROM water_level
-       WHERE datetime_event >= datetime('now', ?)
+       WHERE datetime_event >= datetime('now', 'localtime', ?)
        ORDER BY datetime_event ASC`
     )
     .all(`-${days} days`) as Measure[];
