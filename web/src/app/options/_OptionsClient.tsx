@@ -325,6 +325,40 @@ export default function OptionsClient({
 
         <details className="group py-2 border-b border-slate-200 dark:border-slate-800">
           <summary className="cursor-pointer text-sm font-medium flex justify-between items-center">
+            <span>Le bilan « Apporté / Soutiré / Net » sous le graph ?</span>
+            <span className="text-slate-400 group-open:rotate-90 transition-transform">▶</span>
+          </summary>
+          <div className="text-xs text-slate-600 dark:text-slate-400 mt-2 leading-relaxed space-y-2">
+            <p>
+              Sous chaque graph, 3 mini-cases montrent <strong>le bilan d&apos;eau sur la fenêtre choisie</strong>{" "}(1 j, 3 j, 7 j, etc.).
+              Elles se recalculent automatiquement quand on change la fenêtre.
+            </p>
+            <ul className="list-disc ml-5 space-y-1">
+              <li>
+                <strong>Apporté</strong>{" "}(vert) — la somme de toutes les hausses entre 2 mesures consécutives sur la
+                fenêtre. C&apos;est l&apos;<em>apport naturel</em> : pluie, sources, fonte.
+              </li>
+              <li>
+                <strong>Soutiré</strong>{" "}(rouge) — la somme de toutes les baisses entre 2 mesures consécutives. Ça inclut
+                surtout <em>EDF qui turbine</em> au barrage, plus l&apos;évaporation et les petites fuites. On ne peut pas
+                séparer la part EDF du reste sans accès à leurs chiffres de production.
+              </li>
+              <li>
+                <strong>Net</strong>{" "}(vert si positif, rouge si négatif) — c&apos;est <code>apporté − soutiré</code>, soit la
+                différence simple entre le niveau du début de la fenêtre et celui de la fin. C&apos;est la même valeur que
+                « VS Hier » sur 1 j, « VS il y a 3 jours » sur 3 j, etc.
+              </li>
+            </ul>
+            <p>
+              <strong>Exemple</strong> : sur 1 j, on peut avoir « Net +3 cm » mais en réalité <strong>+6 cm</strong>{" "}sont
+              tombés et <strong>−3 cm</strong>{" "}ont été soutirés. Le net donne juste la photo finale, le bilan donne le
+              détail des flux.
+            </p>
+          </div>
+        </details>
+
+        <details className="group py-2 border-b border-slate-200 dark:border-slate-800">
+          <summary className="cursor-pointer text-sm font-medium flex justify-between items-center">
             <span>La phrase IA en haut de page : c&apos;est quoi ?</span>
             <span className="text-slate-400 group-open:rotate-90 transition-transform">▶</span>
           </summary>
